@@ -111,7 +111,8 @@ Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
 архивация.
 
 **Релиз в конце каждой фазы** (см. RELEASING.md):
-- бамп версии `pyproject.toml` + `cli.py` (0.22.0, 0.23.0, …);
+- бамп версии только `__init__.__version__` — SemVer монотонно (0.3.0, 0.4.0, …),
+  НЕ номер фазы (см. RELEASING.md, Вариант A);
 - публикация в TestPyPI → PyPI → GitHub Release (`bash scripts/release.sh`,
   или `git tag v<x.y.z> && git push --tags` + `.github/workflows/publish.yml`);
 - обновить `CHANGELOG.md` (что появилось для пользователя).
