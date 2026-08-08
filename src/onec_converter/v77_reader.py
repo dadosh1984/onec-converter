@@ -11,9 +11,8 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 class DatSyntaxError(ValueError):
@@ -133,7 +132,7 @@ class V77Reader:
             self._sections[name] = Section(name, payload)
 
     @classmethod
-    def from_bytes(cls, data: bytes, encoding: str = 'cp866') -> V77Reader:
+    def from_bytes(cls, data: bytes, encoding: str = 'cp866') -> 'V77Reader':
         """Чтение из байтов (для тестов на фикстурах)."""
         obj = cls.__new__(cls)
         obj.path = Path('<bytes>')
