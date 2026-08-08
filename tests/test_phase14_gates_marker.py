@@ -6,9 +6,7 @@
 """
 from __future__ import annotations
 
-import importlib
-
 
 def test_phase14_docs_tests_import():
-    importlib.import_module('tests.test_8x_index_format')
-    importlib.import_module('tests.test_8x_index_warning_preserved')
+    import tests.test_8x_index_format  # noqa: F401
+    import tests.test_8x_index_warning_preserved  # noqa: F401
