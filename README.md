@@ -1,5 +1,10 @@
 # onec-converter — MCP-сервер переноса данных между ИБ 1С
 
+![CI](https://img.shields.io/github/actions/workflow/status/dadosh1984/onec-converter/ci.yml?branch=main&label=CI)
+![Python](https://img.shields.io/pypi/pyversions/onec-converter)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Version](https://img.shields.io/github/v/tag/dadosh1984/onec-converter)
+
 Авторский проект (код пишется с нуля; чужие проекты — только источник идей о форматах).
 
 ## Возможности
@@ -22,6 +27,11 @@ python -m venv .venv
 ```
 После установки доступны две точки входа: MCP-сервер (`python -m onec_converter.mcp_server`)
 и CLI (`onec-converter`).
+
+Проверить окружение (версии mcp/PyYAML, доступность кеша) можно одной командой:
+```
+onec-converter doctor
+```
 
 ## CLI (Фаза 9, без MCP)
 

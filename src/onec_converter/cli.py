@@ -330,6 +330,61 @@ def cmd_config_versions(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_doctor(_args: argparse.Namespace) -> int:
+    """Диагностика окружения (Фаза 17): версии/зависимости/кеш.
+
+    Не падает на отсутствующих компонентах — печатает статус и возвращает
+    ＞0, если есть проблемы, мешающие работе.
+    """
+    import importlib.metadata as md
+    import platform
+    import shutil
+
+    problems = 0
+
+    def row(name: str, ok: bool, detail: str = '') -> None:
+        nonlocal problems
+        mark = 'OK ' if ok else 'WARN'
+        print(f'  [{mark}] {name}{(": " + detail) if detail else ""}')
+        if not ok:
+            problems += 1
+
+    print(f'onec-converter doctor (python {platform.python_version()})')
+    # версия mcp — совместимость 1.x
+    try:
+        mcp_ver = md.version('mcp')
+        ok = mcp_ver.split('.')[0] == '1'
+        row('mcp', ok, f'{mcp_ver}{" (2.x несовместим — нужен 1.x)" if not ok else ""}')
+    except md.PackageNotFoundError:
+        row('mcp', False, 'не установлен')
+    # PyYAML
+    try:
+        import yaml  # type: ignore[import-untyped]  # noqa: F401
+        row('PyYAML', True, md.version('PyYAML'))
+    except (ImportError, ModuleNotFoundError):
+        row('PyYAML', False, 'не установлен — dump_metadata(fmt=yaml) не работает')
+    # дисковый кеш
+    cache_dir = Path('.onec_cache')
+    try:
+        cache_dir.mkdir(exist_ok=True)
+        free = shutil.disk_usage(cache_dir).free
+        free_gb = free / (1024 ** 3)
+        row('cache', True, f'.onec_cache: {free_gb:.1f} ГБ свободно')
+    except OSError as exc:
+        row('cache', False, f'недоступен: {exc}')
+    # CLI-зависимости (необязательные модули)
+    for mod, label in [('olefile', 'olefile'), ('openpyxl', 'openpyxl'),
+                       ('httpx', 'httpx')]:
+        try:
+            __import__(mod)
+            row(label, True)
+        except (ImportError, ModuleNotFoundError):
+            row(label, False, 'не установлен')
+    print('doctor: ' + ('все проверки пройдены' if problems == 0
+                        else f'{problems} проблема(ы) выявлено'))
+    return 0 if problems == 0 else 1
+
+
 # ---- entry point ----
 
 def build_parser() -> argparse.ArgumentParser:
@@ -394,6 +449,8 @@ def build_parser() -> argparse.ArgumentParser:
                                        help='Версии конфигурации из файла базы (Фаза 11)')
     p_config_versions.add_argument('--source-dir', required=True)
 
+    sub.add_parser('doctor', help='Диагностика окружения (Фаза 17): зависимости/кеш')
+
     return p
 
 
@@ -409,6 +466,7 @@ def main(argv: list[str] | None = None) -> int:
         'query': cmd_query,
         'guid-diff': cmd_guid_diff,
         'config-versions': cmd_config_versions,
+        'doctor': cmd_doctor,
     }
     try:
         handler = handlers.get(args.command or '')

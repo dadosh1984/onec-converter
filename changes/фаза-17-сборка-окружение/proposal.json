@@ -1,0 +1,16 @@
+{
+  "title": "фаза-17-сборка-окружение",
+  "goal": "Фаза 17 — сборка и окружение (Enterprise-grade установка). Цель: `pip install -e \".[dev]\"` и `bash scripts/gates.sh` работают на чистом клоне. Задачи: (1) pyproject: зафиксировать `mcp>=1.9,<2.0` (текущая установка 1.29.0, код совместим; на 2.x API сломан — не давать устанавливаться), добавить `PyYAML` в dependencies, добавить `types-olefile`, `types-openpyxl` в dev; (2) gates.sh: сделать vitest условным — если package.json/*.test.ts отсутствуют, вывод skip-предупреждения и НЕ fail (сейчас `set -euo pipefail` + безусловный npx vitest роняет весь прогон на чистом клоне); (3) удалить `src/tasks/*.ts` из git (git rm --cached, удалить с диска) вопреки их наличию в git при gitignored; (4) добавить LICENSE (MIT, авторский); (5) согласовать docs/backlog.md (Фаза 14: отметить осознанный отказ, убрать противоречие) и docs/roadmap.md (отметить закрытые фазы, убрать 26 незакрытых [ ] для сделанного); (6) команда `onec-converter doctor` — диагностика окружения (версия mcp, наличие yaml, место на диске/кеш) с понятными сообщениями, без падения; (7) GitHub Actions workflow (push/PR) — `bash scripts/gates.sh pytest ruff mypy` на CI. Реализовать всё авторским кодом, без копирования. — Python (онеc_converter, pyproject.toml, scripts/gates.sh, .github/workflows)",
+  "platform": "Философия: без копирования, авторский код. Ворота: mypy strict, ruff, pytest, vitest. Не ломать существующую функциональность. gates.sh должен работать на чистом клоне (условный vitest). mcp — совместимость с текущей установкой (mcp 1.29.0).",
+  "constraints": "high",
+  "budget": "high",
+  "clarity": "clear",
+  "language": "ru",
+  "appliesLessons": [
+    "mcp-python-1-7:forge:01528e6c32f6",
+    "фаза-8-xlsx-отчёты:shield:2aa0eefd02e7",
+    "фаза-7-сквозной-перенос:shield:be4adfcf0907",
+    "migrate-tool-e2e-pipeline:shield:7fa3ad4497fa",
+    "фаза-11-новая-порция:forge:1cab45743c7e"
+  ]
+}

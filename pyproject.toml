@@ -8,14 +8,19 @@ version = "0.1.0"
 description = "Перенос данных между информационными базами 1С (MCP-сервер + CLI)"
 requires-python = ">=3.11"
 dependencies = [
-    "mcp>=1.2",
+    # mcp: 1.x (2.x переписан — mcp.server.fastmcp удалён); порт на 2.x — отдельная работа
+    "mcp>=1.9,<2.0",
     "olefile>=0.47",
     "openpyxl>=3.1",
     "httpx>=0.27",
+    "PyYAML>=6.0",  # dump_metadata(fmt='yaml')
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.5", "mypy>=1.10"]
+dev = [
+    "pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.5", "mypy>=1.10",
+    "types-olefile", "types-openpyxl",
+]
 
 [project.scripts]
 onec-converter = "onec_converter.cli:main"
