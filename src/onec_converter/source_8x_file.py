@@ -25,6 +25,7 @@
 
 from __future__ import annotations
 
+import mmap
 import re
 import struct
 import zlib
@@ -34,7 +35,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Self
 
+from .cache import Cache, file_key
 from .model import ObjectType
+
+_METADATA_CACHE_INSTANCE: Cache | None = None
 
 PAGE_HEADER = b'1CDBMSV8'
 PAGE_HEADER_SIZE = 24
@@ -344,18 +348,27 @@ class Database1CD:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self._f = open(self.path, 'rb')  # noqa: SIM115 — дескриптор живёт весь срок чтения
+        self._mm: mmap.mmap | None = None
         try:
             self.version, self.total_pages, self.page_size = self._read_header()
+            # mmap: чтение страниц = срез памяти, без seek+read на каждую страницу
+            self._mm = mmap.mmap(self._f.fileno(), 0, access=mmap.ACCESS_READ)
         except Exception:
             self._f.close()
             raise
         self._tables: dict[str, TableDef] | None = None
-        self._config: dict[str, bytes] | None = None
+        self._config_raw: list[tuple[TableDef, str, int, int]] | None = None
+        self._config_index_: dict[str, tuple[TableDef, int, int]] | None = None
+        self._config_inflated: dict[str, bytes] | None = None
         self._dbnames: dict[str, tuple[str, int]] | None = None
         self._locale = ''
         self._blob_cache: dict[int, bytes] = {}  # blob_page -> данные blob-таблицы
+        self._root_data: bytes | None = None  # данные root-объекта (каталог)
 
     def close(self) -> None:
+        if self._mm is not None:
+            self._mm.close()
+            self._mm = None
         self._f.close()
 
     def __enter__(self) -> Self:
@@ -377,8 +390,10 @@ class Database1CD:
         return Version(v0, v1, v2, v3), total_pages, page_size
 
     def read_page(self, num: int) -> bytes:
-        self._f.seek(num * self.page_size)
-        return self._f.read(self.page_size)
+        """Страница из mmap (срез памяти — без системных вызовов на страницу)."""
+        assert self._mm is not None
+        start = num * self.page_size
+        return self._mm[start:start + self.page_size]
 
     # ---- объекты (цепочки страниц) ----
     def read_object(self, header_page: int) -> bytes:
@@ -411,7 +426,10 @@ class Database1CD:
 
     # ---- blob-цепочки root-объекта ----
     def _read_root_blob(self, start: int) -> bytes:
-        data = self.read_object(2)
+        if self._root_data is None:
+            # root-объект читается один раз (каталог: 8033 таблиц -> 8033 blob-цепочек)
+            self._root_data = self.read_object(2)
+        data = self._root_data
         out: list[bytes] = []
         pos = start
         seen: set[int] = set()
@@ -519,11 +537,10 @@ class Database1CD:
     # ---- DBNames (привязка GUID ↔ таблица) ----
     def read_dbnames(self) -> dict[str, tuple[str, int]]:
         if self._dbnames is None:
-            config = self.read_config()
-            raw = config.get('DBNames')
+            raw = self.config_get('DBNames')
             if raw is None:
                 raise FormatError('DBNames не найден в PARAMS')
-            text = _inflate(raw).decode('utf-8-sig')
+            text = raw.decode('utf-8-sig')
             # GUID может встречаться несколько раз: основная таблица
             # ("Reference",74) и таблица изменений ("ReferenceChngR",1731).
             # Нужна запись с основным kind (приоритет по убыванию).
@@ -538,8 +555,25 @@ class Database1CD:
 
     # ---- конфигурация (CONFIG + CONFIGSAVE) ----
     def read_config(self) -> dict[str, bytes]:
-        if self._config is None:
-            out: dict[str, bytes] = {}
+        """Все файлы конфигурации, распакованные (медленно на 8.3: 47k файлов).
+
+        Предпочтителен точечный доступ через `config_get()` — он распаковывает
+        только запрошенные файлы (read_metadata использует ~2.5k из 47k).
+        """
+        raw = self._config_raw
+        if raw is None:
+            raw = self._load_config_rows()
+        return {nm: _inflate(self.read_blob(t, off, size))
+                for t, nm, off, size in raw}
+
+    def _load_config_rows(self) -> list[tuple[TableDef, str, int, int]]:
+        """Строки CONFIG/CONFIGSAVE/PARAMS: (таблица, имя, смещение, размер).
+
+        Blob-данные не читаются — только указатели (быстро: ~0.1s на 47k
+        файлов). Реальное чтение — лениво, по запросу.
+        """
+        if self._config_raw is None:
+            rows: list[tuple[TableDef, str, int, int]] = []
             for tname in ('CONFIG', 'CONFIGSAVE', 'PARAMS'):
                 if tname not in self.tables:
                     continue
@@ -555,13 +589,43 @@ class Database1CD:
                     off, size = struct.unpack(
                         '<2I', row[f['BINARYDATA'].offset:
                                    f['BINARYDATA'].offset + 8])
-                    data = self.read_blob(t, off, size)
-                    out[nm] = _inflate(data)
-            self._config = out
-        return self._config
+                    rows.append((t, nm, off, size))
+            self._config_raw = rows
+        return self._config_raw
+
+    def config_get(self, name: str) -> bytes | None:
+        """Распакованный файл конфигурации по имени (лениво, с кешем)."""
+        index = self._config_index()
+        if self._config_inflated is None:
+            self._config_inflated = {}
+        hit = self._config_inflated.get(name)
+        if hit is not None:
+            return hit
+        entry = index.get(name)
+        if entry is None:
+            return None
+        t, off, size = entry
+        hit = _inflate(self.read_blob(t, off, size))
+        self._config_inflated[name] = hit
+        return hit
+
+    def _config_index(self) -> dict[str, tuple[TableDef, int, int]]:
+        """Индекс файлов конфигурации: имя -> (таблица, смещение, размер)."""
+        if self._config_index_ is None:
+            index: dict[str, tuple[TableDef, int, int]] = {}
+            for t, nm, off, size in self._load_config_rows():
+                index[nm] = (t, off, size)
+            self._config_index_ = index
+        return self._config_index_
 
 
 def _inflate(data: bytes) -> bytes:
+    """Распаковка deflate-потока (raw, wbits=-15).
+
+    Внимание: первый байт raw-deflate НЕ всегда 0x78 (проверено на 1C_8.3:
+    47 627 из 47 648 файлов сжаты, префиксы 0x9c/0x94 — BTYPE=2). Попытка
+    распаковки — единственный надёжный способ отличить сжатое от plain.
+    """
     try:
         return zlib.decompress(data, -15)
     except zlib.error:
@@ -640,6 +704,156 @@ def _find_collections(tree: Any) -> list[tuple[str, list[Any]]]:
     return found
 
 
+def _skip_ws(text: str, p: int, n: int) -> int:
+    while p < n and text[p] in ' \t\r\n':
+        p += 1
+    return p
+
+
+def _skip_quoted(text: str, p: int, n: int) -> int:
+    """Пропустить строку в кавычках (без построения значения): вернуть позицию после."""
+    p += 1
+    while p < n:
+        c = text[p]
+        if c == '"':
+            if p + 1 < n and text[p + 1] == '"':
+                p += 2
+                continue
+            return p + 1
+        if c == '\\' and _surrogate_cp(text, p) != -1:
+            if (p + 10 < n and text[p + 5:p + 6] == '\\'
+                    and _surrogate_cp(text, p + 5) != -1):
+                p += 10
+            else:
+                p += 5
+            continue
+        p += 1
+    return p
+
+
+def _skip_value(text: str, p: int, n: int) -> int:
+    """Пропустить одно значение (атом/список) без построения дерева."""
+    depth = 0
+    while p < n:
+        c = text[p]
+        if c == '"':
+            p = _skip_quoted(text, p, n)
+        elif c == '{':
+            depth += 1
+            p += 1
+        elif c == '}':
+            if depth == 0:
+                return p  # список закончился: позиция на '}'
+            depth -= 1
+            p += 1
+            if depth <= 0:
+                return p
+        elif c == ',' and depth == 0:
+            return p  # разделитель элементов списка
+        else:
+            p += 1
+    return p
+
+
+def _atom_value(text: str, p: int, n: int) -> tuple[Any, int]:
+    """Атомарное значение (строка/число) без рекурсии в списки."""
+    if p >= n:
+        return '', p
+    if text[p] == '"':
+        tok, p2 = _parse_quoted(text, p)
+        return str(tok), p2
+    s = p
+    while p < n and text[p] not in ',}{ \t\r\n':
+        p += 1
+    return text[s:p], p
+
+
+def _list_prefix(text: str, p: int, n: int, need: int) -> tuple[list[Any], int]:
+    """Список: собрать первые need значений (списки — целиком), остальное пропустить."""
+    p += 1
+    items: list[Any] = []
+    while True:
+        p = _skip_ws(text, p, n)
+        if p >= n:
+            break
+        if text[p] == '}':
+            return items, p + 1
+        if len(items) < need:
+            if text[p] == '{':
+                v, p = _list_prefix(text, p, n, 1_000_000)
+            else:
+                v, p = _atom_value(text, p, n)
+            items.append(v)
+        else:
+            p = _skip_value(text, p, n)
+        p = _skip_ws(text, p, n)
+        if p < n and text[p] == ',':
+            p += 1
+    return items, p
+
+
+def _object_name_fast(text: str) -> tuple[str, str]:
+    """Имя/синоним объекта из текста скобкофайла без полного разбора.
+
+    Разбирает только префикс дерева: корневой список, его второй элемент
+    (список описаний) и первый подходящий элемент ['0', sub, …] — до
+    синонима включительно. Остальное содержимое пропускается сканнером
+    (без построения дерева) — на 8.3 это в ~10 раз быстрее parse_bracket.
+    """
+    n = len(text)
+    p = 1 if text.startswith('\ufeff') else 0
+    p = _skip_ws(text, p, n)
+    if p >= n or text[p] != '{':
+        return '', ''
+    # корневой список: элемент 0 — атом, элемент 1 — список описаний
+    p += 1
+    _, p = _atom_value(text, _skip_ws(text, p, n), n)
+    p = _skip_ws(text, p, n)
+    if p >= n or text[p] != ',':
+        return '', ''
+    p = _skip_ws(text, p + 1, n)
+    if p >= n or text[p] != '{':
+        return '', ''
+    p += 1  # список описаний
+    while True:
+        p = _skip_ws(text, p, n)
+        if p >= n:
+            return '', ''
+        c = text[p]
+        if c == '}':
+            return '', ''
+        name = syn = ''
+        p2 = p
+        if c == '{':
+            # попытка: el = ['0', sub, …]
+            q = _skip_ws(text, p + 1, n)
+            v0, q = _atom_value(text, q, n)
+            q = _skip_ws(text, q, n)
+            if str(v0) == '0' and q < n and text[q] == ',':
+                q = _skip_ws(text, q + 1, n)
+                if q < n and text[q] == '{':
+                    sub, p2 = _list_prefix(text, q, n, 4)
+                    if len(sub) >= 4:
+                        name = syn = ''
+                        if (str(sub[0]) == '0'
+                                or (isinstance(sub[1], list) and len(sub[1]) >= 3
+                                    and str(sub[1][0]) == '1')):
+                            name = str(sub[2])
+                            sn = sub[3]
+                            if isinstance(sn, list) and len(sn) >= 3:
+                                syn = str(sn[2])
+            if name or syn:
+                return name, syn
+            p = p2
+            if p <= _skip_ws(text, p, n):
+                p = _skip_value(text, p, n)
+        else:
+            p = _skip_value(text, p, n)
+        p = _skip_ws(text, p, n)
+        if p < n and text[p] == ',':
+            p += 1
+
+
 def _object_name(tree: Any) -> tuple[str, str]:
     """(имя, синоним) объекта из ['1', [...]] (8.1 и 8.3-форматы).
 
@@ -682,31 +896,39 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
 
     Объекты конфигурации (CONFIG/DBNames) связываются с физическими таблицами
     по DBNames (kind + номер); поля — физические поля таблицы.
+    Результат кешируется на диск (по признакам файла) — повторные вызовы
+    для одной и той же базы выполняются за миллисекунды.
     """
+    p = Path(path)
+    cache = _metadata_disk_cache()
+    key = file_key(p)
+    hit = cache.get_json(key, 'metadata')
+    if isinstance(hit, dict):
+        return hit  # type: ignore[no-any-return,unused-ignore]
     objects: list[dict[str, Any]] = []
     tables: list[str] = []
     locale = ''
-    with Database1CD(path) as db:
+    with Database1CD(p) as db:
         tables = sorted(db.tables)
         locale = db.locale
         dbnames = db.read_dbnames()
-        config = db.read_config()
-        root = parse_bracket(config['root'].decode('utf-8'))
+        root = parse_bracket((db.config_get('root') or b'').decode('utf-8'))
         main_guid = str(root[1])
-        main = parse_bracket(config[main_guid].decode('utf-8'))
+        main = parse_bracket((db.config_get(main_guid) or b'').decode('utf-8'))
 
         for class_guid, node in _find_collections(main):
             kind = _COLLECTION_CLASS.get(class_guid)
             if kind is None:
                 continue
             for guid in (str(g) for g in node[2:]):
-                if guid not in config:
+                raw = db.config_get(guid)
+                if raw is None:
                     continue
-                raw = config[guid]
                 if not raw.lstrip(b'\xef\xbb\xbf').startswith(b'{'):
                     # не скобкофайл (JSON/бинарные данные) — пропустить
                     continue
-                name, synonym = _object_name(parse_bracket(raw.decode('utf-8')))
+                name, synonym = _object_name_fast(
+                    raw.lstrip(b'\xef\xbb\xbf').decode('utf-8'))
                 binding = dbnames.get(guid.lower())
                 if binding is None:
                     continue
@@ -733,7 +955,17 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
                     'guid': guid,
                     'attributes': attrs,
                 })
-    return {'objects': objects, 'tables': tables, 'locale': locale}
+    result = {'objects': objects, 'tables': tables, 'locale': locale}
+    cache.put_json(key, 'metadata', result)
+    return result
+
+
+def _metadata_disk_cache() -> Cache:
+    """Дисковый кеш метаданных (в памяти процесса — один экземпляр)."""
+    global _METADATA_CACHE_INSTANCE
+    if _METADATA_CACHE_INSTANCE is None:
+        _METADATA_CACHE_INSTANCE = Cache()
+    return _METADATA_CACHE_INSTANCE
 
 
 def to_model(path: str | Path) -> list[ObjectType]:
