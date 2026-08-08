@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "done": 32,
+  "total": 32,
+  "skipped": 0,
+  "pending": [],
+  "missingSnippets": [],
+  "reportPath": "changes/mcp-python-1-7/forge-report.md",
+  "message": "forge complete: 32 done, 0 skipped from cache"
+}

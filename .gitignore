@@ -1,0 +1,36 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.onec_cache/
+.spike/
+node_modules/
+pnpm-lock.yaml
+
+# Базы 1С (сотни МБ — не в git)
+1C_8.1/
+1C_8.3/
+1С_7.7/
+*.1CD
+
+# Временные отчёты диагностики
+ctx.txt
+tmp_dbg.py
+escape_report.txt
+
+# Артефакты рабочего процесса агента (TS-спайки, отчёты Orion)
+src/tasks/
+reports/
+src/config/orionTdd.json
+*.test.ts
+*.ts
+pnpm-workspace.yaml
+package.json
+package-lock.json
+tsconfig.json
