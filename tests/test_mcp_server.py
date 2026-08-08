@@ -216,3 +216,40 @@ def test_dump_metadata_tool(tmp_path: Path):
     res_y = json.loads(dump_metadata(str(tmp_path), str(yaml_out), fmt='yaml'))
     assert res_y['ok']
     assert 'Банки' in yaml_out.read_text(encoding='utf-8')
+
+
+def test_playbook_sequence():
+    """Плейбук: 16 шагов, next-поля согласованы, вшиваются в JSON-ответы."""
+    import json as _json
+
+    from onec_converter.mcp_server import PLAYBOOK, PLAYBOOK_NEXT, playbook
+
+    steps = _json.loads(playbook())
+    assert steps['ok'] and len(steps['steps']) == 16
+    cmds = [p['command'].split('(')[0] for p in PLAYBOOK]
+    assert cmds[0] == 'tools'
+    assert 'step_init' in cmds and 'step_load' in cmds and 'verify' in cmds
+    # next-поля согласованы с именами тулов плейбука
+    for tool, nxt in PLAYBOOK_NEXT.items():
+        assert nxt and tool, tool
+    # `next` вшивается в JSON-ответы тулов (через visible_tool-обёртку)
+    from onec_converter.mcp_server import query_table
+    res = _json.loads(query_table('1C_8.1', '_REFERENCE3', '_CODE=00001', 1))
+    assert 'next' in res and res['ok']
+
+
+def test_terminal_visibility(capsys):
+    """Терминальная видимость: события пишутся в stderr (не в stdout)."""
+    from onec_converter.terminal import now_ms, tool_error, tool_finished, tool_started
+
+    tool_started('table_sizes', "'1C_8.1', 'Reference'")
+    tool_finished('table_sizes', True, 12.5, 'ok=True, count=75')
+    tool_error('query_table', 3.0, 'таблица не найдена: _XXX')
+    captured = capsys.readouterr()
+    assert captured.out == ''            # stdout чист (JSON-RPC)
+    err = captured.err
+    assert '[onec-converter' in err
+    assert '▶ table_sizes' in err and '✔ table_sizes' in err
+    assert '✘ query_table' in err
+    assert '12 ms' in err
+    assert now_ms() > 0

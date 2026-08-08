@@ -4,10 +4,17 @@
           → prevalidate → preview → load → verify
 Правило «1→1»: привязка пары источник→приёмник в проекте, блокировка загрузки
 при несовпадении. Кеш: повторный inspect/extract не перечитывает базу.
+
+Видимость в терминале: каждое применение команды пишется в stderr
+([onec-converter …] ▶/✔/✘ имя(аргументы)) — видно в терминале сервера
+и в TUI MCP-клиентов. Ответ каждого тула содержит `next` — рекомендуемую
+следующую команду плейбука (см. docs/playbook.md), чтобы агент
+продолжал работу по универсальной последовательности.
 """
 
 from __future__ import annotations
 
+import functools
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -22,10 +29,105 @@ from .inspect_target import ProjectBinding, inspect_target_from_http
 from .intermediate import OBJ_TYPE, save_json_batch
 from .mapping import build_prompt, validate_rules
 from .source_8x_file import decode_field
+from .terminal import now_ms, tool_error, tool_finished, tool_started, tool_summary
 from .timings import GLOBAL as GLOBAL_TIMINGS
 from .validate import validate_batch
 
 mcp = FastMCP('onec-converter')
+
+# Универсальная последовательность команд переноса (плейбук). Поле `next`
+# в ответах тулов ведёт агента по этим шагам; тул playbook() возвращает
+# полный список (см. docs/playbook.md).
+PLAYBOOK: list[dict[str, str]] = [
+    {'step': '1', 'command': 'tools()',
+     'goal': 'Список доступных команд сервера'},
+    {'step': '2', 'command': 'pipeline_status()',
+     'goal': 'Состояние пайплайна: коннекторы, кеш, последний шаг, timings'},
+    {'step': '3', 'command': "search_schema(source_dir, '<имя объекта>')",
+     'goal': 'Найти таблицы метаданных по имени/синониму (например «Зарплат»)'},
+    {'step': '4', 'command': "table_sizes(source_dir, '<фильтр>')",
+     'goal': 'Оценить объём: строки и байты по таблицам (что переносить)'},
+    {'step': '5', 'command': 'compare_structures(source_dir, target_dir)',
+     'goal': 'Расхождения структур: только в источнике/приёмнике, разные типы'},
+    {'step': '6',
+     'command': 'step_init(project_dir, source_ib_id, target_ib_id, '
+                "source_dir, source_encoding='cp866')",
+     'goal': 'Привязка пары источник→приёмник (правило 1→1)'},
+    {'step': '7', 'command': 'step_inspect_source()',
+     'goal': 'Метаданные источника (справочники, документы, секции)'},
+    {'step': '8', 'command': 'step_inspect_target(target_metadata)',
+     'goal': 'Структура приёмника (через HTTP-расширение 8.3)'},
+    {'step': '9', 'command': 'step_map(meta_source, meta_target, rules)',
+     'goal': 'Валидация TOON-правил маппинга + промпт для LLM'},
+    {'step': '10', 'command': 'query_table(source_dir, table, filters, limit)',
+     'goal': 'Выборочная проверка данных (пример записи, контроль условий)'},
+    {'step': '11', 'command': 'step_extract(out_file)',
+     'goal': 'Извлечение данных источника в промежуточный JSON'},
+    {'step': '12', 'command': 'step_prevalidate()',
+     'goal': 'Контроль количества, ссылок, дубликатов перед загрузкой'},
+    {'step': '13', 'command': 'transform → preview',
+     'goal': 'Применение правил маппинга, пробная загрузка (dry-run)'},
+    {'step': '14', 'command': 'step_load(http_load)',
+     'goal': 'Запись в приёмник через HTTP-сервис (с ретраями)'},
+    {'step': '15', 'command': 'verify',
+     'goal': 'Сверка источник↔приёмник: полнота переноса, контроль'},
+    {'step': '16', 'command': 'pipeline_status()',
+     'goal': 'Итоговое состояние пайплайна + метрики времени'},
+]
+
+
+def _playbook_summary() -> str:
+    return ' → '.join(p['command'].split('(')[0] for p in PLAYBOOK)
+
+
+def visible_tool(name: str, description: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Декоратор тула: логирует применение команды в терминал (stderr)
+    и регистрирует тул в FastMCP. Ответ дополняется полем `next`
+    (рекомендуемая следующая команда плейбука), если тул вернул JSON-объект.
+    """
+
+    def deco(fn: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(fn)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            started = now_ms()
+            arg_parts = [str(a) for a in args[:2]]
+            arg_parts += [f'{k}={v}' for k, v in list(kwargs.items())[:3]]
+            args_repr = ', '.join(arg_parts)
+            tool_started(name, args_repr)
+            try:
+                result = fn(*args, **kwargs)
+                summary = tool_summary(result)
+                tool_finished(name, True, now_ms() - started, summary)
+                if isinstance(result, str):
+                    try:
+                        data = json.loads(result)
+                        if isinstance(data, dict):
+                            data.setdefault('next', PLAYBOOK_NEXT.get(name, ''))
+                            return json.dumps(data, ensure_ascii=False)
+                    except (ValueError, TypeError):
+                        pass
+                return result
+            except Exception as exc:
+                tool_error(name, now_ms() - started, str(exc))
+                raise
+
+        mcp.add_tool(wrapper, name=name, description=description)
+        return wrapper
+
+    return deco
+
+
+# Рекомендуемая следующая команда для каждого тула (плейбук).
+PLAYBOOK_NEXT: dict[str, str] = {
+    'tools': 'pipeline_status()',
+    'pipeline_status': "search_schema(source_dir, 'Зарплат') — найти объекты переноса",
+    'search_schema': 'table_sizes(source_dir, "Reference") — оценить объём',
+    'table_sizes': 'compare_structures(source_dir, target_dir) — расхождения структур',
+    'compare_structures': 'step_init(project_dir, source_ib_id, target_ib_id, '
+                          "source_dir, source_encoding='cp866')",
+    'dump_metadata': 'compare_structures(source_dir, target_dir)',
+    'query_table': 'step_extract(out_file) — извлечение данных в intermediate JSON',
+}
 
 
 @dataclass
@@ -176,7 +278,7 @@ class PipelineState:
                 {'name': 'verify', 'doc': 'Сверка источник↔приёмник (полнота переноса)'}]
 
 
-@mcp.tool()
+@visible_tool('pipeline_status', 'Состояние пайплайна переноса: коннекторы, кеш, последний шаг, метрики (точка входа для LLM)')
 def pipeline_status() -> str:
     """Статус пайплайна переноса: коннекторы, кеш, последний шаг, метрики (точка входа для LLM)."""
     state = PipelineState(Path('.'))
@@ -185,13 +287,13 @@ def pipeline_status() -> str:
     return json.dumps(st, ensure_ascii=False)
 
 
-@mcp.tool()
+@visible_tool('tools', 'Список тулов пайплайна (точка входа для LLM-агента)')
 def tools() -> list[dict[str, Any]]:
     """Список тулов пайплайна (точка входа для LLM-агента)."""
     return PipelineState(Path('.')).tools()
 
 
-@mcp.tool()
+@visible_tool('table_sizes', 'Размеры таблиц базы 1CD (идея A2: метрики 1C_PrometheusExporter)')
 def table_sizes(source_dir: str, tables: str = '') -> str:
     """Размеры таблиц базы 1CD (идея A2: метрики 1C_PrometheusExporter).
 
@@ -216,7 +318,7 @@ def table_sizes(source_dir: str, tables: str = '') -> str:
                       ensure_ascii=False)
 
 
-@mcp.tool()
+@visible_tool('search_schema', 'Двунаправленный поиск метаданные↔таблицы (идея C1: 1CDBStorageStructureInfo)')
 def search_schema(source_dir: str, query: str) -> str:
     """Двунаправленный поиск метаданные↔таблицы (идея C1: 1CDBStorageStructureInfo).
 
@@ -254,7 +356,7 @@ def search_schema(source_dir: str, query: str) -> str:
                       ensure_ascii=False)
 
 
-@mcp.tool()
+@visible_tool('compare_structures', 'Diff-отчёт структур двух баз 1CD (идея C2: RDT1C)')
 def compare_structures(source_dir: str, target_dir: str) -> str:
     """Diff-отчёт структур двух баз 1CD (идея C2: RDT1C анализ конфигураций).
 
@@ -296,7 +398,7 @@ def compare_structures(source_dir: str, target_dir: str) -> str:
                       ensure_ascii=False)
 
 
-@mcp.tool()
+@visible_tool('query_table', 'Консоль запросов: выборка записей таблицы 1CD с фильтрами (идея C3)')
 def query_table(source_dir: str, table: str, filters: str = '',
                 limit: int = 100) -> str:
     """Консоль запросов: выборка записей таблицы 1CD с фильтрами (идея C3).
@@ -352,7 +454,7 @@ def query_table(source_dir: str, table: str, filters: str = '',
                       default=str)
 
 
-@mcp.tool()
+@visible_tool('dump_metadata', 'Дамп метаданных базы в git-дружественный текст (идея D1: GitConverter)')
 def dump_metadata(source_dir: str, out_file: str = '', fmt: str = 'json') -> str:
     """Дамп метаданных базы в git-дружественный текст (идея D1: GitConverter).
 
@@ -383,4 +485,18 @@ def dump_metadata(source_dir: str, out_file: str = '', fmt: str = 'json') -> str
         written = str(p)
     return json.dumps({'ok': True, 'fmt': fmt, 'objects': len(md['objects']),
                        'out_file': written, 'text': text[:2000]},
+                      ensure_ascii=False)
+
+
+@visible_tool('playbook', 'Универсальная последовательность команд переноса данных (см. docs/playbook.md)')
+def playbook() -> str:
+    """Возвращает универсальную последовательность команд MCP-сервера
+    (плейбук) для переноса данных между ИБ 1С. Ответ каждого тула содержит
+    поле `next` — следующую рекомендуемую команду, поэтому агент движется
+    по плейбуку автоматически. Для конкретного примера (начисления
+    заработной платы 8.1→8.3) — см. docs/playbook.md.
+    """
+    return json.dumps({'ok': True, 'steps': PLAYBOOK,
+                       'sequence': _playbook_summary(),
+                       'next': PLAYBOOK_NEXT.get('playbook', 'tools()')},
                       ensure_ascii=False)
