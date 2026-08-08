@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 import zlib
 from dataclasses import dataclass, field
@@ -28,7 +29,6 @@ class Base77:
     """Каталог файловой ИБ 7.7 (метаданные + данные)."""
 
     base_dir: Path
-    encoding: str = 'cp866'
     _md: V77Metadata | None = field(default=None, repr=False)
     _reader: V77Reader | None = field(default=None, repr=False)
 
@@ -52,11 +52,11 @@ class Base77:
     @property
     def data(self) -> V77Reader:
         if self._reader is None:
-            self._reader = V77Reader(self.dat_path, encoding=self.encoding)
+            self._reader = V77Reader(self.dat_path)
         return self._reader
 
     @classmethod
-    def from_dt(cls, dt_path: str | Path, workdir: Path | None = None) -> Base77:
+    def from_dt(cls, dt_path: str | Path, workdir: Path | None = None) -> 'Base77':
         """Распаковка 1Cv7.DT (zlib-контейнер) во временный каталог.
 
         Формат .dt 7.7: заголовок + поток zlib с файлами ИБ.

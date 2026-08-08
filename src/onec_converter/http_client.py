@@ -28,7 +28,7 @@ class LoadResult:
         return not self.errors
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> LoadResult:
+    def from_payload(cls, payload: dict[str, Any]) -> 'LoadResult':
         return cls(created=int(payload.get('created', 0)),
                    updated=int(payload.get('updated', 0)),
                    errors=list(payload.get('errors', [])))
@@ -42,14 +42,12 @@ class HttpClient83:
     timeout: float = 60.0
     retries: int = 3
     batch_size: int = 500
-    transport: httpx.AsyncBaseTransport | None = None
     _client: httpx.AsyncClient | None = field(default=None, init=False, repr=False)
 
     async def client(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self.base_url,
-                                             timeout=httpx.Timeout(self.timeout),
-                                             transport=self.transport)
+                                             timeout=httpx.Timeout(self.timeout))
         return self._client
 
     async def aclose(self) -> None:
@@ -64,8 +62,7 @@ class HttpClient83:
             try:
                 r = await c.request(method, path, json=json)
                 if r.status_code in (200, 201):
-                    data: dict[str, Any] = r.json()
-                    return data
+                    return r.json()
                 if r.status_code in (400, 409):
                     raise HttpServiceError(f'HTTP {r.status_code}: {r.text[:500]}')
             except httpx.TransportError as exc:

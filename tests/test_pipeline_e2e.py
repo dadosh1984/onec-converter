@@ -15,7 +15,7 @@ import httpx
 import pytest
 
 from onec_converter.base_reader import Base77
-from onec_converter.http_client import HttpClient83
+from onec_converter.http_client import HttpClient83, HttpServiceError
 from onec_converter.intermediate import OBJ_ATTRS, OBJ_KEY, OBJ_TYPE
 from onec_converter.transform import transform_object
 from onec_converter.validate import validate_batch
@@ -140,7 +140,7 @@ def test_http_load_rejects_bad_pair(tmp_path: Path):
         client = HttpClient83('http://target:8080', retries=1,
                               transport=httpx.MockTransport(handler))
         try:
-            with pytest.raises(Exception):
+            with pytest.raises(HttpServiceError):
                 await client.load([{}], 'srcA', 'tgtX')  # type: ignore[list-item]
         finally:
             await client.aclose()
