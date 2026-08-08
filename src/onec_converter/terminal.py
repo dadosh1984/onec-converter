@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
 def _stamp() -> str:
-    return datetime.now().strftime('%H:%M:%S')
+    return datetime.now(UTC).strftime('%H:%M:%S')
 
 
 def _emit(line: str) -> None:
