@@ -1,0 +1,7 @@
+# Spec: core
+
+## Purpose
+Реализовать Фазу 28 DX в onec-converter: (1) BDD-обёртка сквозных сценариев — tests/bdd.py: given/when/then-DSL на pytest-фикстурах без новых зависимостей (Step: kind/name/fn; Scenario: ctx+steps+run()+report+dump; фикстура scenario через tests/conftest.py) + tests/test_bdd_scenario.py: сквозной сценарий миграции на синтетике (источник fake-база → extract → transform по правилам → load_direct в копию → verify); (2) sonar_report.py — `onec-converter sonar-report`: запуск ruff --output-format=json и конвертация в SonarQube Generic Issue Import (XML) или JSON: one_issue (RUF022→RU022, F/E→MAJOR иначе MINOR), sonar_report(target, fmt); SonarReportError; CLI --target/--format xml|json/--out; (3) OpenAPI-спека приёмника docs/openapi.yaml: scripts/gen_openapi.py генерирует из кода (пути GET /metadata, POST /load из http_client.py; обработчики МетаданныеИБ/ЗаписьДанных из Module.bsl; ApiKeyAuth X-API-Key); (4) тесты +9: BDD-сценарий и хелперы, sonar JSON/XML-валидность/ошибки, openapi-генератор и валидность yaml; (5) README «Разработка и качество», CHANGELOG 0.13.0, план Фаза 28 ✅; релиз 0.13.0.
+
+## Acceptance criteria
+- [ ] Placeholder — refine during implementation

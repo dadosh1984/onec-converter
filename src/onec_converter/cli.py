@@ -283,6 +283,25 @@ async def _http_load(objs: list[dict[str, Any]],
     return created, updated, errors
 
 
+def cmd_sonar_report(args: argparse.Namespace) -> int:
+    """Отчёт ruff в sonar-формате (Фаза 28): --format xml|json, --target,
+    --out — запись в файл для CI-артефакта."""
+    from .sonar_report import SonarReportError, sonar_report
+
+    try:
+        rep = sonar_report(args.target, args.format)
+    except SonarReportError as exc:
+        return _err(str(exc))
+    if args.out:
+        Path(args.out).write_text(rep['body'], encoding='utf-8')
+    else:
+        print(rep['body'])
+    print(json.dumps({'ok': True, 'total': rep['total'],
+                      'format': rep['format']}, ensure_ascii=False),
+          file=sys.stderr)
+    return 0
+
+
 def cmd_dump_report(args: argparse.Namespace) -> int:
     """Экспорт отчёта в S3 (Фаза 27): файл JSON/XLSX -> bucket
     через минимальный SigV4-клиент (--endpoint для S3-совместимых)."""
@@ -780,6 +799,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_dr.add_argument('--secret', default='', help='secret key (или AWS_* env)')
     p_dr.add_argument('--region', default='us-east-1', help='регион')
 
+    p_sr = sub.add_parser('sonar-report',
+                          help='Отчёт ruff в sonar-формате для CI (Фаза 28)')
+    p_sr.add_argument('--target', default='src',
+                      help='каталог/файл линтинга (по умолчанию src)')
+    p_sr.add_argument('--format', default='xml', choices=('xml', 'json'),
+                      help='xml — Generic Issue Import (по умолчанию); json')
+    p_sr.add_argument('--out', default='',
+                      help='запись отчёта в файл (иначе stdout)')
+
     return p
 
 
@@ -808,6 +836,7 @@ def main(argv: list[str] | None = None) -> int:
         'techlog': cmd_techlog,
         'fetch-config': cmd_fetch_config,
         'dump-report': cmd_dump_report,
+        'sonar-report': cmd_sonar_report,
     }
     try:
         handler = handlers.get(args.command or '')

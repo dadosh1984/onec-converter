@@ -85,14 +85,14 @@ Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
 
 Идеи: artbear/1bdd (BDD), acc-export/stebi (Sonar), swagger-1c (OpenAPI).
 
-- [ ] [fact] BDD-обёртка сквозных тестов: `given/when/then`-описание сценариев
+- [ ] [fact] BDD-обёртка сквозных тестов: `given/when/then`-описание сценариев ✅
       миграции (через pytest-фикстуры, без новых зависимостей)
-- [ ] [fact] `onec-converter sonar-report`: генерация отчёта lint/ruff в sonar-совместимом
+- [ ] [fact] `onec-converter sonar-report`: генерация отчёта lint/ruff в sonar-совместимом ✅
       формате (для CI-интеграции)
-- [ ] [fact] `Module.bsl` + `swagger`: статическая OpenAPI-спека приёмника
+- [ ] [fact] `Module.bsl` + `swagger`: статическая OpenAPI-спека приёмника ✅
       (`docs/openapi.yaml`), сгенерированная из кода (скрипт)
-- [ ] [fact] тесты: BDD-сценарий проходит; sonar-report валиден (XML/JSON)
-- [ ] [assumption] README/docs: раздел «Разработка и качество»
+- [ ] [fact] тесты: BDD-сценарий проходит; sonar-report валиден (XML/JSON) ✅
+- [ ] [assumption] README/docs: раздел «Разработка и качество» ✅
 
 ---
 

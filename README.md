@@ -138,6 +138,17 @@ onec-converter clone-db --source-dir 1C_8.1 --target-dir stand/ \
 `load` автоматически сохраняет `workdir/snapshot.1CD` приёмника до записи
 (откат при сбое); отключить: `--no-snapshot`.
 
+### Разработка и качество (Фаза 28)
+```
+onec-converter sonar-report --target src --format xml --out sonar.xml
+onec-converter sonar-report --format json     # CI-артефакт
+```
+BDD-сценарии миграции — `tests/bdd.py` (given/when/then через pytest-фикстуры,
+без новых зависимостей) + `tests/test_bdd_scenario.py` (сквозной сценарий
+extract→transform→load→verify). Sonar: отчёт ruff в формате SonarQube
+Generic Issue Import (XML/JSON). OpenAPI-спека приёмника — `docs/openapi.yaml`,
+генерируется `scripts/gen_openapi.py` из кода (http_client + Module.bsl).
+
 ### Мониторинг и интеграции (Фаза 27)
 ```
 onec-converter base_health --source-dir ./src          # MCP-тул: версия,

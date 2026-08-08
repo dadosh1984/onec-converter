@@ -3,6 +3,20 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.13.0 (2026-08)
+
+### DX: BDD-сценарии, Sonar-отчёт, OpenAPI-спека (Фаза 28)
+- BDD-обёртка сквозных сценариев: `tests/bdd.py` — given/when/then-DSL на
+  pytest-фикстурах (без новых зависимостей) + сценарий миграции
+  extract→transform→load→verify на синтетике.
+- `onec-converter sonar-report`: отчёт ruff в формате SonarQube Generic Issue
+  Import (XML/JSON) — CI-интеграция (--target, --format, --out).
+- OpenAPI-спека приёмника `docs/openapi.yaml`: генерируется из кода
+  (scripts/gen_openapi.py: пути из http_client.py, обработчики из Module.bsl).
+- README → «Разработка и качество».
+- Тесты: BDD-сценарий + хелперы, sonar (JSON/XML/ошибки), openapi (+9).
+- План: Фаза 28 ✅.
+
 ## 0.12.0 (2026-08)
 
 ### Мониторинг и интеграции (Фаза 27)
