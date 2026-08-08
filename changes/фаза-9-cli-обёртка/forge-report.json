@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "done": 9,
+  "total": 9,
+  "skipped": 0,
+  "pending": [],
+  "missingSnippets": [],
+  "reportPath": "changes/фаза-9-cli-обёртка/forge-report.md",
+  "message": "forge complete: 9 done, 0 skipped from cache"
+}

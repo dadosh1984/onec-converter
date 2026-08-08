@@ -4,7 +4,7 @@
 
 ## Возможности
 - Перенос данных **из любой версии ИБ 1С** (7.7, 8.1, 8.2, 8.3) в **1С 8.x** (основной
-  приёмник — 8.3) по командам LLM-агентов (Claude, Cursor).
+  приёмник — 8.3) по командам LLM-агентов (Claude, Cursor) или из терминала (CLI).
 - Работает **без платформы 1С** (Windows/Linux/macOS).
 - Источники: 7.7 — каталог ИБ (`1Cv7.MD` + `1Cv77.dat`, текстовый формат, CP866);
   8.x — файловая ИБ `1Cv8.1CD` (собственный парсер).
@@ -20,6 +20,60 @@ python -m venv .venv
 .venv/Scripts/pip install -e ".[dev]"     # Windows
 .venv/bin/pip install -e ".[dev]"        # Linux/macOS
 ```
+После установки доступны две точки входа: MCP-сервер (`python -m onec_converter.mcp_server`)
+и CLI (`onec-converter`).
+
+## CLI (Фаза 9, без MCP)
+
+Использование пайплайна из терминала, без MCP-клиента. Только stdlib (argparse),
+все команды переиспользуют те же модули, что и MCP-сервер.
+
+```
+onec-converter --help
+onec-converter <команда> --help
+```
+
+### inspect — метаданные источника
+```
+onec-converter inspect --source-dir "1C_8.1" --source-encoding cp866
+# 7.7: sections, unique_ids, constants, references_tables
+# 8.x: таблицы + размеры (rows/bytes)
+```
+
+### extract — данные источника → intermediate JSON
+```
+onec-converter extract --source-dir "1С_7.7" --out extract.json
+onec-converter extract --source-dir "1С_7.7" --out extract.json \
+    --encoding cp1251 --anonymize-fields "Фамилия,Телефон" --limit 1000 \
+    --objects "Справочник.Номенклатура,Справочник.Контрагенты"
+```
+
+### map — правила маппинга (TOON)
+```
+onec-converter map --rules-file rules.json
+onec-converter map --llm-prompt --meta-source ms.json --meta-target mt.json --out prompt.txt
+```
+`--llm-prompt` формирует промпт для LLM по метаданным обеих сторон **без вызова LLM**.
+
+### transform — применение правил к intermediate
+```
+onec-converter transform --rules-file rules.json --input extract.json --out transformed.json
+onec-converter transform --rules-file rules.json --input extract.json --preview 10   # dry-run
+```
+
+### load — загрузка батчей в приёмник (файл/HTTP)
+```
+onec-converter load --input transformed.json --target out/            # файл-приёмник
+onec-converter load --input transformed.json --http http://host/base \
+    --source-ib srcA --target-ib tgtX                                # HTTP-расширение 8.3
+```
+HTTP-режим использует `HttpClient83` с ретраями; при ошибках — exit 1 и отчёт.
+
+### status — состояние пайплайна
+```
+onec-converter status --project-dir project/
+```
+Выводит JSON: коннекторы (file/http/sql), кеш (entries/bytes/hits), последний шаг, привязка 1→1.
 
 ## Подключение к Claude / Cursor
 Пропишите MCP-сервер (stdio):

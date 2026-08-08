@@ -551,6 +551,8 @@ class Database1CD:
 
     # ---- строки ----
     def table_rows(self, table: TableDef) -> Iterator[bytes]:
+        if not table.data_page:
+            return  # схема без данных (пустая таблица) — как в table_stats
         data = self.read_object(table.data_page)
         rl = table.row_length
         for i in range(0, len(data) - len(data) % rl, rl):

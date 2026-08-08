@@ -1,0 +1,16 @@
+{
+  "title": "фаза-9-cli-обёртка",
+  "goal": "Фаза 9: CLI-обёртка для onec_converter (перенос данных между ИБ 1С) без MCP-клиента — команды прямо в терминале. Только stdlib (argparse), без новых зависимостей. Уже есть: пайплайн-класс в mcp_server.py (step_init/step_inspect_source/step_extract/step_inspect_target/step_map/step_prevalidate/step_load/step_status), коннекторы Base77 (v77_reader), source_8x_file/source_8x_dt, transform, validate, verify, xlsx_report, MCP-тулы разведки (table_sizes, compare_structures, search_schema, dump_metadata). Задачи: (1) [fact] cli.py: argparse-подкоманды inspect, extract, map, transform, load, status + общий контекст (--source-dir, --project-dir и т.п.); (2) [assumption] extract: чтение 7.7/8.x → intermediate JSON (--encoding, --anonymize-fields, --limit); (3) [assumption] map: генерация/валидация TOON-правил (--rules-file, --llm-prompt — вывод промпта без вызова LLM); (4) [assumption] load: загрузка батчей в приёмник (файл/HTTP) с ретраями и отчётом об ошибках; (5) [fact] pyproject: entry-point onec-converter; unit-тесты CLI (subprocess или прямой вызов, зелёные ворота); (6) [assumption] README: раздел CLI с примерами. Ворота: pytest, mypy strict, ruff, vitest (.ts-сниппеты). Python 3.11+, Windows, реальные базы read-only. — Авторский код с нуля; реальные базы read-only; mypy strict/ruff/pytest зелёные; только stdlib для CLI (argparse), без новых зависимостей; entry-point onec-converter в pyproject",
+  "platform": "CLI не должен дублировать логику MCP-сервера — переиспользовать существующие модули (step_*-методы пайплайна, transform, validate, verify).",
+  "constraints": "",
+  "budget": "",
+  "clarity": "clear",
+  "language": "ru",
+  "appliesLessons": [
+    "mcp-python-1-7:forge:db7846bdf437",
+    "mcp-python-1-7:forge:01528e6c32f6",
+    "фаза-7-сквозной-перенос:shield:be4adfcf0907",
+    "mcp-python-1-7:forge:9c866da712f6",
+    "фаза-8-xlsx-отчёты:shield:2aa0eefd02e7"
+  ]
+}
