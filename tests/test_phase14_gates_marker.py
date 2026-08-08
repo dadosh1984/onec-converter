@@ -8,5 +8,6 @@ from __future__ import annotations
 
 
 def test_phase14_docs_tests_import():
-    import tests.test_8x_index_format
-    import tests.test_8x_index_warning_preserved  # noqa: F401
+    import importlib
+    importlib.import_module("tests.test_8x_index_format")
+    importlib.import_module("tests.test_8x_index_warning_preserved")
