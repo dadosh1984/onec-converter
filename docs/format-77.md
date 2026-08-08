@@ -1066,3 +1066,39 @@ Top-level storage (19): `AccountChart`, `AccountChartList`, `CalcJournal`, `Calc
 Открытые вопросы:
 - [ ] Точная разметка кортежей документов/журналов/регистров (позиции реквизитов).
 - [ ] Вложенные `{"Actions"}`/`{"Accounting"}` внутри операций.
+
+### Спайк: внутренний формат 1Cv7.MD (продолжение)
+
+Известно (первичный анализ реальной базы):
+- 19 top-level storage: AccountChart, AccountChartList, CalcJournal, CalcVar,
+  Container.Contents, Document, GlobalData, Journal, Metadata, Operation, OperationList,
+  Picture, ProvList, Report, SubFolder, SubList, Subconto, TypedText, UserDef.
+- Объекты конфигурации — storage `Document/Document_Number1015`,
+  `CalcVar/CalcVar_Number2451`, `Subconto/Subconto_Number354`; внутри — потоки
+  `Container.Contents` (сериализованный объект), `WorkBook`, `Dialog Stream`,
+  `MD Programm text`, `Page.N`, `Container.Profile`, `Commands`.
+
+Открытые вопросы (решаются скриптом в .spike на реальной базе):
+- [ ] Внутренний формат потока `Container.Contents` (сериализация дерева объектов:
+      имя, вид, реквизиты, типы, точность).
+- [ ] Где лежат описания справочников и реквизитов (storage `Metadata`/`GlobalData`).
+- [ ] Маппинг «секция/таблица 1Cv77.dat ↔ объект MD» (Unique IDs → имена объектов).
+
+### Спайк: грамматика 1Cv77.dat (подтверждено на реальной базе)
+
+Порядок секций верхнего уровня:
+`{"7.70","" → System table → Unique IDs → Constants → References →
+документы/журналы/регистры → Template Operations → Correct Entries}`.
+
+Терминалы (для парсера v77_reader):
+- строка: `"…"`, кавычки внутри удваиваются `""`;
+- число: без кавычек, десятичная точка (0.00, 679330.00);
+- дата: `YYYYMMDD` без кавычек (20241204);
+- ссылка: `"NNN|"` (внутренний числовой ID), пустая — `"0|"`;
+- Unique IDs: `{id_таблицы, "счётчик|"}` (напр. `{81,"312|"}`);
+- запись справочника: `{"193|","0|","  221","","0|",0,0,"00959","","",""}`
+  (ID записи, служебные, код фиксированной ширины с ведущими пробелами, имя, ...).
+
+Открытые вопросы:
+- [ ] Точная разметка кортежей документов/журналов/регистров (позиции реквизитов).
+- [ ] Вложенные `{"Actions"}`/`{"Accounting"}` внутри операций.

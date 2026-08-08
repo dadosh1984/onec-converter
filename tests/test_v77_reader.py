@@ -1,8 +1,8 @@
 """Unit-тесты парсера 1Cv77.dat."""
-import pytest
-
-from onec_converter.v77_reader import DatSyntaxError, V77Reader, parse_dat
+from onec_converter.v77_reader import V77Reader, parse_dat, DatSyntaxError
 from tests.fixtures.gen_dat import make_dat
+
+import pytest
 
 
 def test_parse_quoted_escape():

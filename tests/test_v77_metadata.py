@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from onec_converter.v77_metadata import MetadataError, V77Metadata
+from onec_converter.v77_metadata import V77Metadata, MetadataError
 
 
 def test_missing_md_raises(tmp_path: Path):

@@ -1,5 +1,5 @@
 """Unit-тесты единой модели."""
-from onec_converter.model import AttrDef, AttrType, ObjectType, Record, build_key
+from onec_converter.model import AttrType, AttrDef, ObjectType, Record, build_key
 
 
 def test_object_type_full_name():
