@@ -271,4 +271,12 @@ rep = load_direct('1C_8.1', objects, workdir='./out')   # {'ok', 'copy_path', ..
 с parent-связью (`_<Base>IDRREF`) и `_LINENO`. Ненайденные ссылки → 16 нулей
 + `ref_warnings` (пакет не обрывается). Формат — `docs/format-8x.md`,
 раздел «Ссылки и табличные части». Индексы (`_VT` в т.ч.) НЕ пересобираются
-(Фаза 14). Подробнее — `docs/zero-setup.md` и `docs/pipeline.md`.
+(Фаза 14).
+
+Фаза 16 (надёжность): `load_direct(..., verify_after=True)` после записи
+читает копию парсером и сверяет roundtrip без потерь (`verify.ok`); запись
+атомарна (временный `work.1CD` → атомарный replace) — сбой не оставляет
+полу-записи; лимиты (`max_objects`), нехватка диска (ENOSPC) → `LoadError`
+с понятным текстом; tmp-файлы чистятся. Как проверить копию —
+`docs/zero-setup.md` и `docs/playbook.md`. Подробнее — `docs/zero-setup.md`
+и `docs/pipeline.md`.

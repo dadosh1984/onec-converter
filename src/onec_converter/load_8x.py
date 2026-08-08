@@ -14,6 +14,7 @@ write_8x.append_records; оригинал никогда не изменяетс
 
 from __future__ import annotations
 
+import os
 import struct
 import tempfile
 from dataclasses import dataclass
@@ -173,20 +174,41 @@ def _field_map(meta: dict[str, Any]) -> list[FieldMap]:
 
 
 def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
-                workdir: str | Path | None = None) -> dict[str, Any]:
+                workdir: str | Path | None = None,
+                verify_after: bool = True,
+                max_objects: int | None = None) -> dict[str, Any]:
     """Прямая запись объектов в КОПИЮ приёмника; оригинал не изменяется.
 
-    Возвращает {'ok', 'copy_path', 'total', 'tables': {таблица: n},
-    'ref_warnings': [...]}. Документы и табличные части (Фаза 15): REF-поля
-    резолвятся в _IDRREF приёмника, ненайденные — 16 нулей + ref_warnings.
+    Возвращает {'ok', 'copy_path', 'total', 'tables', 'ref_warnings',
+    'verify'}. Документы и табличные части (Фаза 15): REF-поля резолвятся в
+    _IDRREF приёмника, ненайденные — 16 нулей + ref_warnings. Атомарный
+    replace (Фаза 16): пишем во временный work-файл, по завершении заменяем;
+    verify_after читает записанное парсером и сверяет без потерь;
+    max_objects — лимит размера батча (LoadError при превышении).
     """
     target = Path(target_dir)
+    if max_objects is not None and len(objects) > max_objects:
+        raise LoadError(f'размер батча {len(objects)} > max_objects={max_objects}')
     cd = target / '1Cv8.1CD'
     if not cd.is_file():
         raise LoadError(f'нет 1Cv8.1CD в {target_dir}')
     wd = Path(workdir) if workdir else Path(tempfile.mkdtemp(prefix='onec_load_'))
     wd.mkdir(parents=True, exist_ok=True)
-    cp = copy_1cd(cd, wd / '1Cv8.1CD')
+    work = wd / 'work.1CD'
+    tries = 0
+    while True:
+        try:
+            copy_1cd(cd, work)
+            break
+        except OSError as e:
+            if getattr(e, 'errno', None) in (28, 112):  # ENOSPC
+                raise LoadError('недостаточно места на диске при копии: '
+                                f'{e}') from e
+            tries += 1
+            if tries > 2:
+                raise
+            work = wd / f'work{tries}.1CD'
+    cp = work
 
     md = read_metadata(cp)
     # meta index: 'Справочник.X' -> {table, ...}
@@ -243,14 +265,108 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
                     vt_rows_by_table.setdefault(vt_table.name, []).append(vrow)
 
     tables_stat: dict[str, int] = {}
-    for table_name, rows in rows_by_table.items():
-        n = append_records(cp, table_name, b''.join(rows))
-        tables_stat[table_name] = n
-    for table_name, rows in vt_rows_by_table.items():
-        n = append_records(cp, table_name, b''.join(rows))
-        tables_stat[table_name] = n
-    return {'ok': True, 'copy_path': str(cp), 'total': len(objects),
-            'tables': tables_stat, 'ref_warnings': ref_warnings}
+    try:
+        for table_name, rows in rows_by_table.items():
+            n = append_records(cp, table_name, b''.join(rows))
+            tables_stat[table_name] = n
+        for table_name, rows in vt_rows_by_table.items():
+            n = append_records(cp, table_name, b''.join(rows))
+            tables_stat[table_name] = n
+    except OSError as e:
+        _cleanup_workfiles(wd)  # удалить все work, включая текущий
+        if getattr(e, 'errno', None) in (28, 112):  # ENOSPC
+            raise LoadError('недостаточно места на диске при записи: '
+                            + str(e)) from e
+        raise
+
+    final = wd / '1Cv8.1CD'
+    try:
+        os.replace(work, final)   # атомарная замена (Фаза 16)
+    except OSError as e:
+        _cleanup_workfiles(wd)
+        if getattr(e, 'errno', None) in (28, 112):  # ENOSPC
+            raise LoadError('недостаточно места на диске: ' + str(e)) from e
+        raise
+    report: dict[str, Any] = {}
+    if verify_after:
+        report = _verify_direct(objects, final, index, prefix_by_table,
+                                idref_counter)
+    return {'ok': True, 'copy_path': str(final), 'total': len(objects),
+            'tables': tables_stat, 'ref_warnings': ref_warnings, 'verify': report}
+
+
+def _cleanup_workfiles(wd: Path, keep: Path | None = None) -> None:
+    """Удалить work-файлы; финальный 1Cv8.1CD не трогается."""
+    for p in wd.glob('work*.1CD'):
+        if keep is not None and p.resolve() == keep.resolve():
+            continue
+        try:
+            p.unlink()
+        except OSError:
+            pass
+
+
+def _verify_direct(objects: list[dict[str, Any]], final: Path,
+                   index: dict[str, Any],
+                   prefix_by_table: dict[str, bytes],
+                   idref_counter: dict[str, int]) -> dict[str, Any]:
+    """Чтение записанных строк из копии и сверка (roundtrip без потерь).
+
+    Для каждого входного объекта эквивалентная строка кодируется заново
+    (object_to_row с тем же idref) и сравнивается с реально записанной
+    строкой в таблице. Возвращает {'ok', 'checked', 'missing', 'mismatched'}.
+    """
+    missing: list[str] = []
+    mismatched: list[str] = []
+    checked = 0
+    with Database1CD(final) as db:
+        # таблица -> список ранее существовавших строк (до новых записей)
+        base_count: dict[str, int] = {}
+        written: dict[str, list[bytes]] = {}
+        for obj in objects:
+            obj_type = obj.get('type')
+            if not obj_type:
+                continue
+            rmeta = index.get(obj_type)
+            table = None
+            if rmeta:
+                table = db.tables.get(rmeta['table'])
+            if not rmeta or table is None:
+                missing.append(obj_type)
+                continue
+            tn = rmeta['table']
+            if tn not in written:
+                rows = list(db.table_rows(table))
+                written[tn] = rows
+                base_count[tn] = len(rows) - _count_of(objects, obj_type)
+            fm = _field_map(rmeta)
+            pref = prefix_by_table.get(tn, b'\x00' * 4)
+            pos = _type_position(objects, obj_type, obj)
+            line = written[tn][base_count[tn] + pos]
+            reread = object_to_row(table, fm, obj,
+                                   _make_idref(pref, pos))
+            if line != reread:
+                mismatched.append(f'{obj_type}:{list(obj.get("key") or [])}')
+            checked += 1
+    return {'ok': not missing and not mismatched, 'checked': checked,
+            'missing': missing[:20], 'mismatched': mismatched[:20]}
+
+
+def _count_of(objects: list[dict[str, Any]], obj_type: str) -> int:
+    return sum(1 for o in objects if o.get('type') == obj_type)
+
+
+def _type_position(objects: list[dict[str, Any]], obj_type: str,
+                   obj: dict[str, Any]) -> int:
+    """Порядковый номер объекта среди однотипных в списке."""
+    n = 0
+    for o in objects:
+        if o.get('type') != obj_type:
+            continue
+        if o is obj:
+            return n
+        n += 1
+    return n
 
 
 def _build_receiver_index(db: Database1CD, table_name: str
