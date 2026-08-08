@@ -72,3 +72,43 @@ def test_strict_ok():
     fm = [_FM('Код', 'NVC', 5)]
     rep = validate_object({'type': 'X', 'attributes': {'Код': 'ok'}}, fm)
     assert rep.ok
+
+
+# ---- Cache.trim (TTL / лимит размера, Фаза 31) ----
+def test_cache_trim_ttl_removes_old(tmp_path: Path):
+    import os
+
+    from onec_converter.cache import Cache as _Cache
+    c = _Cache(tmp_path / 'cache')
+    p = c.put('k1', 'a', b'1')
+    # состарим файл
+    old = __import__('time').time() - 1000
+    os.utime(p, (old, old))
+    c.put('k2', 'b', b'2')
+    n = c.trim(ttl_seconds=100)
+    assert n >= 1
+    assert not c.has('k1', 'a')
+    assert c.has('k2', 'b')
+
+
+def test_cache_trim_max_bytes_removes_oldest(tmp_path: Path):
+    import os
+
+    from onec_converter.cache import Cache as _Cache
+    c = _Cache(tmp_path / 'cache')
+    p1 = c.put('k1', 'a', b'x' * 100)
+    _ = c.put('k2', 'b', b'y' * 100)
+    old = __import__('time').time() - 1000
+    os.utime(p1, (old, old))
+    n = c.trim(max_bytes=150)
+    assert n >= 1
+    assert not c.has('k1', 'a') or not c.has('k2', 'b')  # хотя бы один удалён
+    assert c.stats()['bytes'] <= 150
+
+
+def test_cache_stats_has_age(tmp_path: Path):
+    from onec_converter.cache import Cache as _Cache
+    c = _Cache(tmp_path / 'cache')
+    c.put('k', 'a', b'1')
+    st = c.stats()
+    assert st['files'] >= 1 and 'oldest_age_s' in st

@@ -205,7 +205,7 @@ Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
 - [ ] [fact] единый источник версии: `version = {attr = "onec_converter.__version__"}`
       в pyproject (одна строка в `__init__.py` вместо 3 мест: pyproject/cli/тесты)
 
-## Фаза 31 — Качество и DX из анализа (новые задачи)
+## Фаза 31 — Качество и DX из анализа (новые задачи) — ✅ выполнена
 
 - [ ] [fact] CLI `load --http` + конфиг: документировать `ОжидаемыйКлюч`/`--api-key`
       в extension_83/README.md и корневом README (реальный сценарий)

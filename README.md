@@ -100,7 +100,7 @@ onec-converter transform --rules-file rules.json --input extract.json --preview 
 ```
 onec-converter load --input transformed.json --target out/            # файл-приёмник
 onec-converter load --input transformed.json --http http://host/base \
-    --source-ib srcA --target-ib tgtX                                # HTTP-расширение 8.3
+    --source-ib srcA --target-ib tgtX --api-key секрет              # HTTP-расширение 8.3
 ```
 HTTP-режим использует `HttpClient83` с ретраями; при ошибках — exit 1 и отчёт.
 

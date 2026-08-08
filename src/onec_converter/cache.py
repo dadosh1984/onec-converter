@@ -83,15 +83,57 @@ class Cache:
         return data
 
     def stats(self) -> dict[str, int]:
-        """Статистика кеша: число файлов и общий размер в байтах."""
+        """Статистика кеша: число файлов, размер, возраст самого старого."""
+        import time
         files = 0
         total = 0
+        oldest = None
         if self.root.is_dir():
             for p in self.root.rglob('*'):
                 if p.is_file():
                     files += 1
-                    total += p.stat().st_size
-        return {'files': files, 'bytes': total}
+                    st = p.stat()
+                    total += st.st_size
+                    if oldest is None or st.st_mtime < oldest:
+                        oldest = st.st_mtime
+        now = int(time.time())
+        return {'files': files, 'bytes': total,
+                'oldest_age_s': now - int(oldest) if oldest else 0}
+
+    def trim(self, max_bytes: int | None = None,
+             ttl_seconds: int | None = None) -> int:
+        """Эвикция LRU: удаляет файлы старше ttl, а при превышении max_bytes —
+        самые старые, пока размер не в лимите. Возвращает число удалённых."""
+        import time
+        now = int(time.time())
+        removed = 0
+        files = [p for p in self.root.rglob('*') if p.is_file()]
+        # 1) старше ttl
+        if ttl_seconds:
+            for p in files:
+                if now - int(p.stat().st_mtime) > ttl_seconds:
+                    p.unlink(missing_ok=True)
+                    removed += 1
+        # 2) превышение max_bytes — удаляем самые старые
+        if max_bytes:
+            cur = sum(p.stat().st_size for p in files
+                      if p.exists())
+            files = [p for p in self.root.rglob('*') if p.is_file()]
+            files.sort(key=lambda p: p.stat().st_mtime)
+            for p in files:
+                if cur <= max_bytes:
+                    break
+                sz = p.stat().st_size
+                p.unlink(missing_ok=True)
+                cur -= sz
+                removed += 1
+        self._prune_empty_dirs()
+        return removed
+
+    def _prune_empty_dirs(self) -> None:
+        for entry in self.root.rglob('*'):
+            if entry.is_dir() and not any(entry.iterdir()):
+                entry.rmdir()
 
     def clear(self) -> None:
         """Полная очистка кеша."""
