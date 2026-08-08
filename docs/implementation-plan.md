@@ -185,3 +185,39 @@ Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
 - [ ] [assumption] pytest (все), ruff, mypy strict, vitest — зелёные
 
 ---
+
+---
+
+## Фаза 30 — Регрессии анализа (закрыты) + защита от повторений
+
+Регрессии из повторного анализа (исправлены в hotfix `1fe673c`):
+- [x] [fact] Module.bsl: возвращено `ЗаписьДанных(Запрос) Экспорт` (дубль НайтиОбъект2 + необъявленный Запрос) — модуль компилируется
+- [x] [fact] Dockerfile: install после COPY src (+LICENSE/README) — образ собирается
+- [x] [fact] anonymizer: `_FIO_RE` только 3 слова с заглавной — произвольные фразы не портятся
+- [x] [fact] CLI load: `--api-key`/`--retries` (проброс в HttpClient83, конфиг)
+
+Защита от повторений (автопроверка вне периметра pytest):
+- [ ] [fact] CI: шаг `docker build .` (ловит регрессии Dockerfile)
+- [ ] [fact] CI: шаг `python -m build && twine check` на каждый push (сборка пакета)
+- [ ] [fact] статическая проверка .bsl: скрипт `scripts/check_bsl.py` — дубли
+      `Функция <имя>(` в одном модуле + необъявленные параметры
+- [ ] [fact] единый источник версии: `version = {attr = "onec_converter.__version__"}`
+      в pyproject (одна строка в `__init__.py` вместо 3 мест: pyproject/cli/тесты)
+
+## Фаза 31 — Качество и DX из анализа (новые задачи)
+
+- [ ] [fact] CLI `load --http` + конфиг: документировать `ОжидаемыйКлюч`/`--api-key`
+      в extension_83/README.md и корневом README (реальный сценарий)
+- [ ] [fact] Module.bsl: нормализация значений перед НайтиПоКоду/Наименованию
+      (trim, регистр) — replace не создаёт дубли
+- [ ] [fact] cache: TTL/лимит размера с авто-эвикцией (LRU) — stats уже есть,
+      добавить `Cache.trim(max_bytes)` и вызов при put
+- [ ] [fact] fuzz-тест anonymizer (hypothesis или собственный генератор):
+      случайные строки → не изменяются, если не похожи на ФИО/телефон/ИНН
+- [ ] [fact] `doctor` расширить: проверка «Module.bsl синтаксически валиден»
+      и «пакет собирается» (docker/build)
+- [ ] [assumption] README: раздел «Известные ограничения текущего релиза»
+      (индексы, data_page=0, серверные базы, 1Cv8.dt)
+- [ ] [assumption] CHANGELOG: раздел «0.2.0» актуализировать (фиксы регрессий)
+
+---
