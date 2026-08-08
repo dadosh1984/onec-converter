@@ -24,7 +24,6 @@ ctx.txt
 tmp_dbg.py
 escape_report.txt
 tmp_phase8/
-github_list.xlsx
 
 # Состояние рабочего процесса Orion — не в git
 .orion/
