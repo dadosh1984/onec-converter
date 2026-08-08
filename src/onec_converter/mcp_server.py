@@ -326,18 +326,20 @@ def tools() -> list[dict[str, Any]]:
 
 
 @visible_tool('base_health', 'Здоровье базы 1CD: версия, таблицы/строки, блокировки, свободное место (Фаза 27, идея OneS2Zabbix)')
-def base_health(source_dir: str) -> str:
+def base_health(source_dir: str, include_rows: bool = False) -> str:
     """Сводка «здоровья» файловой ИБ 8.x для мониторинга/агента.
 
-    source_dir — каталог с 1Cv8.1CD (read-only). Возвращает JSON:
-    version (формат), tables, rows, locks (1Cv8.1CL/1Cv8tmp*), free_bytes,
-    file_bytes.
+    source_dir — каталог с 1Cv8.1CD (read-only); include_rows — помимо
+    быстрого health-пинга посчитать число строк (читает данные таблиц,
+    может быть долгим на больших базах). Возвращает JSON: version
+    (формат), tables, rows, rows_computed, locks (1Cv8.1CL/1Cv8tmp*),
+    free_bytes, file_bytes.
     """
     from .health import HealthError
     from .health import base_health as _health
 
     try:
-        rep = _health(source_dir)
+        rep = _health(source_dir, include_rows=include_rows)
     except HealthError as exc:
         return json.dumps({'ok': False, 'error': str(exc)},
                           ensure_ascii=False)

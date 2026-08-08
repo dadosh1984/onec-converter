@@ -12,8 +12,10 @@ load/clone), объект, GUID приёмника (если есть), прав
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TextIO
 
 LEVELS = ('INFO', 'WARN', 'ERROR')
 _active: AuditLog | None = None
@@ -23,12 +25,37 @@ class AuditLog:
     """Журнал аудита: пишет JSONL-записи в файл (или только возвращает их).
 
     path=None — файл не пишется (in-memory, возврат записи для тестов/лога).
+    Держит один открытый handle с буферизованной записью; file_flush —
+    порог накопленных записей для сброса на диск (по умолчанию 1 — каждая
+    запись синхронна, журнал должен быть durable; большие нагруженные
+    миграции могут повышать); max_bytes — ротация в .1 при превышении.
     """
 
-    def __init__(self, path: str | Path | None = None) -> None:
+    def __init__(self, path: str | Path | None = None,
+                 max_bytes: int = 50 * 1024 * 1024,
+                 file_flush: int = 1) -> None:
         self._path = Path(path) if path else None
+        self._max_bytes = max_bytes
+        self._fh: TextIO | None = None
+        self._flush_bytes = 0
+        self._file_flush = file_flush
         if self._path:
             self._path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _handle(self) -> TextIO | None:
+        if self._fh is None and self._path is not None:
+            if self._path.is_file() and self._path.stat().st_size > self._max_bytes:
+                self._rotate()
+            self._fh = open(self._path, 'a', encoding='utf-8')  # noqa: SIM115
+        return self._fh
+
+    def _rotate(self) -> None:
+        """Ротация: содержимое файла ужимается до одной записи-маркера."""
+        if self._path is None:
+            return
+        bak = self._path.with_suffix(self._path.suffix + '.1')
+        shutil.copy2(self._path, bak)
+        self._path.write_text('', encoding='utf-8')
 
     @property
     def path(self) -> Path | None:
@@ -52,9 +79,27 @@ class AuditLog:
             'detail': detail,
         }
         if self._path:
-            with open(self._path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(rec, ensure_ascii=False) + '\n')
+            fh = self._handle()
+            if fh is None:
+                return rec
+            fh.write(json.dumps(rec, ensure_ascii=False) + '\n')
+            self._flush_bytes += 1
+            if self._flush_bytes >= self._file_flush:
+                fh.flush()
+                self._flush_bytes = 0
         return rec
+
+    def flush(self) -> None:
+        """Принудительный сброс буфера на диск."""
+        if self._fh is not None:
+            self._fh.flush()
+
+    def close(self) -> None:
+        """Закрыть handle (idempotent)."""
+        if self._fh is not None:
+            self._fh.flush()
+            self._fh.close()
+            self._fh = None
 
     def info(self, operation: str, **kw: str) -> dict[str, str]:
         return self.record('INFO', operation, **kw)
@@ -69,6 +114,8 @@ class AuditLog:
 def set_audit(path: str | Path | None) -> None:
     """Активировать файловый журнал (None — сброс к in-memory)."""
     global _active
+    if _active is not None:
+        _active.close()
     _active = AuditLog(path) if path else None
 
 

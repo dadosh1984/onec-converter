@@ -31,9 +31,10 @@ def fake_db(tmp_path: Path) -> Path:
 def test_base_health(fake_db: Path):
     from onec_converter.health import base_health
 
-    h = base_health(fake_db)
+    h = base_health(fake_db, include_rows=True)
     assert h['ok']
     assert h['tables'] >= 1 and h['rows'] >= 0
+    assert h['rows_computed'] is True
     assert h['version'] and h['free_bytes'] > 0
     assert h['file_bytes'] > 0 and h['page_size'] > 0
     assert h['locks'] == []  # нет lock-файлов на синтетике

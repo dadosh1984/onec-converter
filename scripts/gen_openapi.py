@@ -39,7 +39,7 @@ def build_openapi(endpoints: list[dict[str, str]],
         '  description: >-',
         '    Приёмник переноса данных: HTTP-сервис 1С (расширение',
         '    extension_83). Спека сгенерирована из кода — scripts/gen_openapi.py.',
-        '  version: 0.13.0',
+        '  version: 0.14.0',
         'servers:',
         '  - url: https://{host}/hsp/onec-converter',
         '    variables:',
@@ -57,6 +57,8 @@ def build_openapi(endpoints: list[dict[str, str]],
         lines.append(f'      operationId: {op}')
         lines.append('      security:')
         lines.append('        - ApiKeyAuth: []')
+        if path == '/load':
+            lines.append('        - BearerAuth: []')
         lines.append('      responses:')
         lines.append("        '200':")
         lines.append('          description: Успешный ответ JSON')
@@ -69,6 +71,10 @@ def build_openapi(endpoints: list[dict[str, str]],
         '      type: apiKey',
         '      in: header',
         '      name: X-API-Key',
+        '    BearerAuth:',
+        '      type: http',
+        '      scheme: bearer',
+        '      bearerFormat: JWT',
     ]
     return '\n'.join(lines) + '\n'
 

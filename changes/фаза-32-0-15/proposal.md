@@ -1,0 +1,8 @@
+# Proposal — фаза-32-0-15
+
+**Goal:** Фаза 32 (0.15.0) — Дефекты по итогам анализа onec-converter: (1) clone_db.py: вычислять file_key(dst) ДО shutil.copy2 и дропать старый ключ кеша; тест повторного клонирования в существующий target_dir; (2) health.py base_health: include_rows=False по умолчанию + sample_tables=N, health-пинг без чтения данных всех таблиц; тест; (3) check_bsl.py добавить целью scripts/gates.sh (паритет с ci.yml); (4) audit.py: один открытый handle + periodic flush, ротация JSONL по размеру; тест; (5) notify.py: retry с backoff для webhook/telegram; тест; (6) openapi.yaml: securitySchemes bearerAuth + тест соответствия спеки реальным путям /metadata /load; (7) CLI extract перейти на intermediate.save_json_stream вместо save_json_batch (закрыть OOM); тест потока; (8) extension_83/Module.bsl: БезопасноеСравнение для X-API-Key; (9) cache: тест что TTL применяется в get/has.
+
+- Platform: тесты в E:\test через gates.sh; версия 0.15.0; mypy только src; сниппеты файл=slug
+- Constraints: compact
+- Budget: compact
+- **Lessons applied (v0.12):** фаза-6-внедрить-идеи:shield:fc4c61f342db, mcp-python-1-7:forge:d46606a68cf7, фаза-11-новая-порция:forge:537c39f668a9, фаза-11-новая-порция:forge:409e2a92d172, фазу-28-dx-onec:forge:17f5466fb69d

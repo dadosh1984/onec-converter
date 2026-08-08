@@ -222,3 +222,126 @@ Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
 - [ ] [assumption] CHANGELOG: раздел «0.2.0» актуализировать (фиксы регрессий)
 
 ---
+
+---
+
+# Фазы 32+ — план по итогам внешнего анализа v0.14.0 (проверено, август 2026)
+
+Вердикт по анализам: 3 регрессии раунда 2 исправлены (Module.bsl/Dockerfile/
+anonymizer ✅); находки раунда 3 подтверждены кодом (clone_db, base_health,
+JWT-разрыв, openapi, check_bsl в gates). Устарело из раунда 1: doctor уже есть,
+стриминг JSON частично есть (CLI extract — НЕ стриминговый — баг). Каждая
+фаза = релиз 0.x.0 (SemVer монотонно).
+
+## Фаза 32 — Дефекты по итогам анализа (0.15.0)
+
+- [x] [fact] clone_db: вычислять file_key(dst) ДО shutil.copy2 и дропать
+      именно старый ключ; тест повторного клонирования в существующий
+      target_dir с закешированными метаданными
+- [x] [fact] base_health: include_rows=False по умолчанию + sample_tables=N —
+      health-пинг не должен читать данные всех таблиц
+- [x] [fact] check_bsl.py — цель scripts/gates.sh (паритет с ci.yml)
+- [x] [fact] audit: один открытый handle + periodic flush; ротация JSONL
+      по размеру
+- [x] [fact] notify: retry с backoff (webhook/telegram), тест
+- [x] [fact] openapi: securitySchemes bearerAuth + тест соответствия
+      спеки реальным путям (/metadata, /load)
+- [x] [fact] CLI extract: переход на save_json_stream (закрыть OOM-риск
+      на больших базах); тест потока
+- [x] [fact] Module.bsl: БезопасноеСравнение для X-API-Key
+- [x] [fact] cache: тест, что TTL применяется в get/has
+- [x] [assumption] pytest (все), conformance, ruff, mypy, vitest — зелёные;
+      релиз 0.15.0
+
+## Фаза 33 — JWT-контур целиком (0.16.0)
+
+- [ ] [fact] CLI mint-token: выпуск Bearer-токена на общем секрете
+      (jwt_auth.mint_jwt) — `onec-converter mint-token --secret ...`
+- [ ] [fact] http_client: режим mint-token (--secret) для `load --http`,
+      тест прохождения токена в Authorization
+- [ ] [fact] openapi: bearerAuth-схема документирована
+- [ ] [fact] extension_83/README + README: token_url — внешний OAuth2-сервер
+      (не входит в поставку), mint-token — локальный режим
+- [ ] [fact] тест согласования mint_jwt ↔ ПроверитьJWT (эталонный вектор
+      HMAC-SHA256)
+- [ ] [assumption] ворота зелёные; релиз 0.16.0
+
+## Фаза 34 — Производительность ядра (0.17.0)
+
+- [ ] [spike] mmap для чтения 1Cv8.1CD (source_8x_file) — большие базы
+      без полной загрузки в RAM; бенчмарк до/после
+- [ ] [fact] table_stats: оценка строк по размеру страницы из метаданных
+      без физического чтения (или лимит чтения)
+- [ ] [fact] load_direct: перенос/пересборка index_page источника
+      (закрыть warning «индексы не пересобираются»); тест e2e
+- [ ] [fact] parallel_extract: ThreadPoolExecutor для независимых
+      справочников (--workers); тест детерминизма
+- [ ] [assumption] ворота зелёные; релиз 0.17.0
+
+## Фаза 35 — Регистры и перечисления (0.18.0)
+
+- [ ] [fact] writer регистров сведений (_InfoRg) и накопления (_AccumRg)
+- [ ] [fact] enum_mapper: авто-маппинг перечислений по внутренним именам
+      (не только индексам)
+- [ ] [fact] map/transform: секция enums в rules.json; CLI-флаги
+- [ ] [fact] рецепт «перенос остатков» (docs/recipes/)
+- [ ] [assumption] ворота зелёные; релиз 0.18.0
+
+## Фаза 36 — SQL-источники (0.19.0)
+
+- [ ] [fact] postgres_schema: чтение метаданных и данных из PostgreSQL
+      (v8_metadata, v8_reference, _InfoRg)
+- [ ] [fact] mssql_schema: чтение из MS SQL Server (pyodbc)
+- [ ] [fact] extract: параметр источника 1CD|postgres|mssql (общая
+      абстракция source); тесты на мок-схеме
+- [ ] [assumption] ворота зелёные; релиз 0.19.0
+
+## Фаза 37 — Безопасность и комплаенс (0.20.0)
+
+- [ ] [fact] pii_scanner: ИНН/СНИЛС/карты/телефоны; профиль UZ
+      (ИНН/ПИНФЛ) в PII_PROFILES
+- [ ] [fact] audit: анонимизация obj/detail при включённой анонимизации
+      (не отдельный канал утечки ПДн)
+- [ ] [fact] tamper-evident audit: SHA-256 хэш-цепочка в JSONL
+- [ ] [fact] gdpr_152_report: отчёт — какие поля анонимизированы, каким
+      алгоритмом, где логи
+- [ ] [fact] rbac_mcp: роли клиентов MCP (inspect-only / load)
+- [ ] [assumption] ворота зелёные; релиз 0.20.0
+
+## Фаза 38 — Мониторинг и DevOps (0.21.0)
+
+- [ ] [fact] prometheus_exporter: строк/сек, ошибки, объёмы (кроме
+      metrics.py — добавить историю/счётчики переноса)
+- [ ] [fact] s3_client: multipart upload для больших отчётов
+- [ ] [fact] docker build — цель gates.sh; docker run smoke в ci.yml
+- [ ] [fact] docker-compose пример: onec-converter + MinIO
+- [ ] [fact] nightly-bench: бенчмарк парсинга на каждой новой версии
+- [ ] [assumption] ворота зелёные; релиз 0.21.0
+
+## Фаза 39 — DX и продукт (0.22.0)
+
+- [ ] [fact] --dry-run глобально для записывающих команд (emulation)
+- [ ] [fact] shell: REPL-режим исследования базы (автодополнение таблиц)
+- [ ] [fact] Makefile (lint/bdd/release); pre-commit — блок коммита
+      .1CD/extract.json с ПДн
+- [ ] [fact] README: «быстрый старт за 5 минут», «известные ограничения»,
+      PyPI на видном месте; release notes на русском без жаргона «Фаза N»
+- [ ] [assumption] ворота зелёные; релиз 0.22.0
+
+## Фаза 40 — AI-навыки (0.23.0)
+
+- [ ] [fact] MCP auto_map_schemas: авто-маппинг полей по именам/синонимам
+      (без внешних LLM-зависимостей)
+- [ ] [fact] MCP explain_diff: человекочитаемые причины расхождений схем
+- [ ] [fact] skill autonomous_migration: сквозной сценарий миграции
+      по командам CLI (плейбук)
+- [ ] [fact] context_compressor: саммари метаданных (5000+ таблиц) для LLM
+- [ ] [assumption] ворота зелёные; релиз 0.23.0
+
+## Бэклог (опционально, по востребованности)
+
+- [ ] [spike] Rust-ядро (PyO3) для FAT-цепей/zlib/NVC — ускорение 10-20x
+- [ ] [spike] web-дашборд (FastAPI + HTMX) для мониторинга переноса
+- [ ] [spike] VSCode-расширение: автодополнение MCP-туллов, подсветка rules.json
+- [ ] [spike] helm-чарт (Kubernetes Job/CronJob)
+- [ ] [spike] encrypt: AES-256 шифрование дампа перед отправкой в облако

@@ -19,12 +19,16 @@ class HealthError(Exception):
     """Ошибка оценки здоровья базы."""
 
 
-def base_health(source_dir: str | Path) -> dict[str, object]:
+def base_health(source_dir: str | Path, include_rows: bool = False,
+                sample_tables: int = 0) -> dict[str, object]:
     """Сводка «здоровья» файловой ИБ 8.x в source_dir.
 
-    rows — суммарное число строк по всем таблицам (table_stats);
-    locks — список lock-файлов (открытая ИБ / остатки); free_bytes —
-    свободное место на диске каталога; version — версия формата.
+    rows — суммарное число строк по таблицам (table_stats) — дорогая
+    операция (читает данные); по умолчанию выключена (include_rows=False),
+    т.к. health-пинг для мониторинга не должен читать гигабайты. При
+    sample_tables>0 вместо всех таблиц берётся выборка — первые N по
+    размеру страницы данных (оценка объёма без полного чтения).
+    version — версия формата; locks — lock-файлы (открытая ИБ).
     """
     src = Path(source_dir)
     cd = src / '1Cv8.1CD'
@@ -40,7 +44,17 @@ def base_health(source_dir: str | Path) -> dict[str, object]:
         page_size = db.page_size
         total_pages = db.total_pages
         tables = sorted(db.tables)
-        rows = sum(db.table_stats(t)[0] for t in tables)
+        if include_rows:
+            chosen = tables
+            if sample_tables and sample_tables < len(tables):
+                # по длине строки из метаданных — оценка объёма без чтения
+                chosen = sorted(
+                    tables,
+                    key=lambda n: db.tables[n].row_length,
+                    reverse=True)[:sample_tables]
+            rows = sum(db.table_stats(t)[0] for t in chosen)
+        else:
+            rows = -1  # не вычислялось — health-пинг без чтения данных
 
     return {
         'ok': True,
@@ -49,6 +63,7 @@ def base_health(source_dir: str | Path) -> dict[str, object]:
         'total_pages': total_pages,
         'tables': len(tables),
         'rows': rows,
+        'rows_computed': include_rows,
         'locks': locks,
         'errors': [],          # зарезервировано под диагностику
         'file_bytes': cd.stat().st_size,

@@ -8,6 +8,7 @@ URL `https://api.telegram.org/bot<token>/sendMessage` и шлёт текст.
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -17,21 +18,37 @@ class NotifyError(Exception):
     """Ошибка отправки уведомления."""
 
 
-def send_webhook(url: str, payload: dict[str, Any], timeout: int = 15
-                 ) -> dict[str, Any]:
+def _retry_delivery(url: str, body: bytes, timeout: int,
+                    attempts: int, backoff: float) -> dict[str, Any]:
+    """Отправка с retry (attempts попыток, экспоненциальный backoff).
+
+    HTTPError (4xx/5xx) — не ретраится (уведомление не изменяет итог),
+    возвращается статус; URLError (сеть) — ретраится с backoff.
+    """
+    last: Exception | None = None
+    for i in range(max(attempts, 1)):
+        req = urllib.request.Request(
+            url, data=body, method='POST',
+            headers={'Content-Type': 'application/json; charset=utf-8'})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return {'ok': resp.status < 400, 'status': resp.status}
+        except urllib.error.HTTPError as exc:
+            return {'ok': False, 'status': exc.code}
+        except urllib.error.URLError as exc:
+            last = exc
+            if i + 1 < max(attempts, 1):
+                time.sleep(backoff * (2 ** i))
+    raise NotifyError(f'уведомление не доставлено за {max(attempts, 1)} попыток: {last}') from last
+
+
+def send_webhook(url: str, payload: dict[str, Any], timeout: int = 15,
+                 attempts: int = 3, backoff: float = 0.5) -> dict[str, Any]:
     """HTTP POST JSON по URL. Возвращает {ok, status}; не бросает на
-    4xx/5xx — статус фиксируется в ответе (best-effort уведомление)."""
+    4xx/5xx — статус фиксируется в ответе (best-effort уведомление). При
+    сетевых сбоях — до attempts попыток с экспоненциальным backoff."""
     body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
-    req = urllib.request.Request(
-        url, data=body, method='POST',
-        headers={'Content-Type': 'application/json; charset=utf-8'})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return {'ok': resp.status < 400, 'status': resp.status}
-    except urllib.error.HTTPError as exc:
-        return {'ok': False, 'status': exc.code}
-    except urllib.error.URLError as exc:
-        raise NotifyError(f'уведомление не доставлено: {exc}') from exc
+    return _retry_delivery(url, body, timeout, attempts, backoff)
 
 
 def telegram_url(token: str, chat_id: str) -> str:

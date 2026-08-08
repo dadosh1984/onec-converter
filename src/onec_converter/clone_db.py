@@ -41,11 +41,15 @@ def clone_db(source_dir: str | Path, target_dir: str | Path,
     if dst.resolve() == cd.resolve():
         raise CloneError('source_dir == target_dir: клонирование в себя')
 
+    # кеш-сброс: вычисляем ключ ПРЕЖНЕГО файла приёмника (если он был)
+    # и дропаем именно его — после копии новый dst получит новый ключ
+    # (новый mtime), которого в кеше ещё нет; старый кеш недействителен.
+    cache = Cache()
+    if dst.is_file():
+        cache.drop(file_key(dst))
+
     # полная копия файла (структура + данные), оригинал не изменяется
     shutil.copy2(cd, dst)
-
-    # кеш-сброс: старый ключ недействителен после пересоздания файла
-    Cache().drop(file_key(dst))
 
     from .source_8x_file import Database1CD
 

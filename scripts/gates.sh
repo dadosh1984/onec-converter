@@ -80,6 +80,11 @@ run_mypy() {
   echo "== mypy (strict) =="
   python -m mypy src
 }
+
+run_bsl() {
+  echo "== check_bsl (расширение 1С) =="
+  python scripts/check_bsl.py || return 1
+}
 run_vitest() {
   if vitest_configured; then
     echo "== vitest =="
@@ -97,6 +102,7 @@ case "$TARGET" in
   mypy)   run_mypy ;;
   vitest) run_vitest ;;
   conformance) run_conformance ;;
-  all)    run_pytest && run_conformance && run_ruff && run_mypy && run_vitest ;;
-  *) echo "неизвестная цель: $TARGET (pytest|ruff|mypy|vitest|conformance|all|--strict-steps|--coverage)" >&2; exit 2 ;;
+  bsl)    run_bsl ;;
+  all)    run_pytest && run_conformance && run_ruff && run_mypy && run_bsl && run_vitest ;;
+  *) echo "неизвестная цель: $TARGET (pytest|ruff|mypy|vitest|conformance|bsl|all|--strict-steps|--coverage)" >&2; exit 2 ;;
 esac

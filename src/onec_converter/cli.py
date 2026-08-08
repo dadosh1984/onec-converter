@@ -26,6 +26,7 @@ from .intermediate import (
     OBJ_TYPE,
     load_json_batch,
     save_json_batch,
+    save_json_stream,
 )
 from .mapping import MappingError, build_prompt, load_rules
 from .objects_filter import ObjectSpec, parse_objects, selects
@@ -184,7 +185,8 @@ def cmd_extract(args: argparse.Namespace) -> int:
     for obj in objs:
         audit.info('extract', obj=str(obj.get(OBJ_TYPE, '')),
                    guid=str(obj.get(OBJ_ID, '')), result='ok')
-    save_json_batch(objs, args.out)
+    # стриминговое сохранение: большие базы не держим целиком в памяти
+    save_json_stream(objs, args.out)
     print(json.dumps({'ok': True, 'objects': len(objs), 'file': args.out},
                      ensure_ascii=False))
     return 0
