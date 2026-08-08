@@ -196,3 +196,23 @@ init → inspect_source → extract → map → transform → prevalidate → lo
 - `docs/format-77.md` — текстовый формат ИБ 7.7 (`1Cv77.dat`, `1Cv7.MD`).
 - `docs/format-8x.md` — формат `1Cv8.1CD` (1CD 8.3.8.0), конфигурация, DBSCHEMA.
 - `docs/zero-setup.md` — фича минимального вмешательства на приёмнике.
+
+## Прямая запись в 1CD (Фаза 10)
+
+Загрузка в приёмник 8.x без HTTP-расширения — напрямую в файл базы.
+**Только на копиях** (`write_8x.copy_1cd`); оригиналы не изменяются.
+
+```python
+from onec_converter.write_8x import copy_1cd, append_records
+
+cp = copy_1cd('1C_8.3/1Cv8.1CD', 'copy.1CD')          # копия — рабочая
+rows = b'\x00' * row_length * 100                     # тестовые строки
+append_records(cp, '_REFERENCE3', rows)               # добавить в конец
+```
+
+- `create_1cd(path, tables)` — новая пустая база по структуре приёмника.
+- `append_records(path, table, rows)` — добавление строк в конец таблицы:
+  новые страницы данных, обновление FAT level 0 и длины объекта, total_pages.
+- Ограничения: fat_level 1 и пустые таблицы (data_page=0) не поддерживаются;
+  индексы и BINARYDATA не пересобираются. Подробнее — `docs/format-8x.md`
+  (раздел «Запись»).
