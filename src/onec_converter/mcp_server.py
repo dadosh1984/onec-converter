@@ -319,6 +319,55 @@ def table_sizes(source_dir: str, tables: str = '') -> str:
                       ensure_ascii=False)
 
 
+@visible_tool('structure_report', 'XLSX-отчёт структуры: diff двух баз (Фаза 8)')
+def structure_report(source_dir: str, target_dir: str, out_file: str) -> str:
+    """XLSX-отчёт структуры двух баз 1CD (Фаза 8).
+
+    Листы «Только в источнике» / «Только в приёмнике» / «Расхождения типов»
+    (объект, поле, тип_источника, тип_приёмника). Возвращает путь к файлу
+    и сводку counts (как в compare_structures).
+    """
+    from .source_8x_file import read_metadata
+    from .xlsx_report import build_structure_report
+
+    src = Path(source_dir) / '1Cv8.1CD'
+    tgt = Path(target_dir) / '1Cv8.1CD'
+    if not src.is_file() or not tgt.is_file():
+        return json.dumps({'ok': False, 'error': 'нет 1Cv8.1CD в source_dir/target_dir'},
+                          ensure_ascii=False)
+    ms = read_metadata(src)
+    mt = read_metadata(tgt)
+    d = diff_structures(ms, mt)
+    out = Path(out_file)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    build_structure_report(d, out)
+    return json.dumps({'ok': True, 'path': str(out), 'counts': d['counts']},
+                      ensure_ascii=False)
+
+
+@visible_tool('table_sizes_report', 'XLSX-отчёт размеров таблиц (Фаза 8)')
+def table_sizes_report(source_dir: str, out_file: str, top_n: int = 50) -> str:
+    """XLSX-отчёт размеров таблиц: лист «Таблицы», сортировка по байтам, топ-N.
+
+    Размеры берутся из Database1CD.table_stats — совпадают с table_sizes.
+    """
+    from .source_8x_file import Database1CD
+    from .xlsx_report import build_sizes_report
+
+    cd = Path(source_dir) / '1Cv8.1CD'
+    if not cd.is_file():
+        return json.dumps({'ok': False,
+                           'error': f'нет 1Cv8.1CD в {source_dir}'},
+                          ensure_ascii=False)
+    with Database1CD(cd) as db:
+        sizes = [(n, *db.table_stats(n)) for n in db.tables]
+    out = Path(out_file)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    build_sizes_report(sizes, out, top_n=top_n)
+    return json.dumps({'ok': True, 'path': str(out), 'tables': len(sizes)},
+                      ensure_ascii=False)
+
+
 @visible_tool('search_schema', 'Двунаправленный поиск метаданные↔таблицы (идея C1: 1CDBStorageStructureInfo)')
 def search_schema(source_dir: str, query: str) -> str:
     """Двунаправленный поиск метаданные↔таблицы (идея C1: 1CDBStorageStructureInfo).
@@ -373,7 +422,21 @@ def compare_structures(source_dir: str, target_dir: str) -> str:
                           ensure_ascii=False)
     ms = read_metadata(src)
     mt = read_metadata(tgt)
+    d = diff_structures(ms, mt)
+    return json.dumps({'ok': True,
+                       'only_source': d['only_source'][:100],
+                       'only_target': d['only_target'][:100],
+                       'type_mismatch': d['type_mismatch'][:100],
+                       'counts': d['counts']},
+                      ensure_ascii=False)
 
+
+def diff_structures(ms: dict[str, Any], mt: dict[str, Any]) -> dict[str, Any]:
+    """Diff двух метаданных (структура): only_source/only_target/type_mismatch.
+
+    Чистая функция — используется JSON-тулом compare_structures и XLSX-тулом
+    structure_report (Фаза 8), чтобы оба отчёта строились из одних данных.
+    """
     def key(o: dict[str, Any]) -> str:
         return f"{o['kind']}.{o['name']}"
 
@@ -389,14 +452,12 @@ def compare_structures(source_dir: str, target_dir: str) -> str:
             if sa[attr] != ta[attr]:
                 diff_types.append({'object': k, 'attr': attr,
                                    'source_type': sa[attr], 'target_type': ta[attr]})
-    return json.dumps({'ok': True,
-                       'only_source': sorted(only_src)[:100],
-                       'only_target': sorted(only_tgt)[:100],
-                       'type_mismatch': diff_types[:100],
-                       'counts': {'only_source': len(only_src),
-                                  'only_target': len(only_tgt),
-                                  'mismatch': len(diff_types)}},
-                      ensure_ascii=False)
+    return {'only_source': sorted(only_src),
+            'only_target': sorted(only_tgt),
+            'type_mismatch': diff_types,
+            'counts': {'only_source': len(only_src),
+                       'only_target': len(only_tgt),
+                       'mismatch': len(diff_types)}}
 
 
 @visible_tool('query_table', 'Консоль запросов: выборка записей таблицы 1CD с фильтрами (идея C3)')
