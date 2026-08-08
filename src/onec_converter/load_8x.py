@@ -23,6 +23,7 @@ from typing import Any
 
 from .load_8x_refs import ReceiverReferenceIndex, _encode_field, make_vt_row
 from .source_8x_file import Database1CD, TableDef, read_metadata
+from .strict import validate_object
 from .write_8x import append_records, copy_1cd
 
 _IDREF_LEN = 16
@@ -155,7 +156,8 @@ def _field_map(meta: dict[str, Any]) -> list[FieldMap]:
 def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
                 workdir: str | Path | None = None,
                 verify_after: bool = True,
-                max_objects: int | None = None) -> dict[str, Any]:
+                max_objects: int | None = None,
+                strict: bool = False) -> dict[str, Any]:
     """Прямая запись объектов в КОПИЮ приёмника; оригинал не изменяется.
 
     Возвращает {'ok', 'copy_path', 'total', 'tables', 'ref_warnings',
@@ -222,6 +224,11 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
                 raise LoadError(f'объект без type: {obj}')
             meta, table = _table_for(obj_type, index, db.tables)
             fm = _field_map(meta)
+            if strict:
+                srep = validate_object(obj, fm)
+                if not srep.ok:
+                    raise LoadError('strict: ошибки валидации: '
+                                    + '; '.join(srep.errors))
             table_name = meta['table']
             if table_name not in prefix_by_table:
                 prefix_by_table[table_name] = _idref_prefix(db, table_name)

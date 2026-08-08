@@ -1,30 +1,65 @@
-"""Анонимизатор персональных данных (PII) — идея B4.
+"""Анонимизатор персональных данных (PII) — идея B4 (модернизация, Фаза 18).
 
 Маскирование персональных данных при переносе между средами (прод → тест):
 - по списку реквизитов (fields) — «Фамилия», «Телефон», «ИНН»;
-- по regexp-паттернам по умолчанию (ФИО вида «Иванов Иван Иванович»,
-  телефоны +99890…, ИНН/паспорт 9+ цифр).
+- по regexp-паттернам (ФИО любой формы: «Иванов Иван Иванович», «Иванов Иван»,
+  нижний регистр «иванов иван», телефоны +99890…, ИНН/паспорт 9+ цифр).
 
-Значения меняются необратимо (детерминированно по исходному значению —
-одинаковый вход -> одинаковый выход, ссылочная целостность сохраняется).
+Режим 'hash' — псевдоним строки через **HMAC-SHA256** с секретом (env
+`ONEC_HASH_SECRET` или параметр secret): одинаковый вход ⇒ одинаковый выход
+(ссылочная целостность сохраняется), а без знания ключа значение не
+восстановить. Без секрета — явное предупреждение и фиксированная соль (НЕ
+тихий sha256 без соли).
+
+Значения меняются детерминированно по исходному значению.
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
+import os
 import re
+import warnings
 from typing import Any
 
 _FIO_RE = re.compile(
-    r'\b([А-ЯЁA-Z][а-яёa-z]+)\s+([А-ЯЁA-Z][а-яёa-z]+)\s+([А-ЯЁA-Z][а-яёa-z]+)\b')
+    r'(?P<last>[А-ЯЁа-яёA-Za-z]{2,})'
+    r'(?:\s+(?P<first>[А-ЯЁа-яёA-Za-z]{2,}))?'
+    r'(?:\s+(?P<mid>[А-ЯЁа-яёA-Za-z]{2,}))?')
 _PHONE_RE = re.compile(r'(?<!\d)(\+?\d[\d\s()-]{8,17}\d)(?!\d)')
 _INN_RE = re.compile(r'(?<!\d)(\d{9,12})(?!\d)')
 
+_FALLBACK_SECRET = 'onec-converter-fallback-secret'  # только при отсутствии ONEC_HASH_SECRET
+_warned_no_secret = False
+
+# Профили анонимизации 152-ФЗ (Фаза 18): типовые поля по сферам применения.
+# Используются как готовые наборы имён полей для Anonymizer(fields=[...]).
+PII_PROFILES: dict[str, list[str]] = {
+    'salary': ['Фамилия', 'Имя', 'Отчество', 'ФИО', 'Телефон', 'МобильныйТелефон',
+               'ИНН', 'Паспорт', 'СНИЛС', 'КПП', 'РасчётныйСчёт', 'Карта'],
+    'retail': ['ФИО', 'Фамилия', 'Имя', 'Отчество', 'Телефон', 'МобильныйТелефон',
+               'ИНН', 'ДокументУдостоверяющийЛичность', 'Адрес'],
+    'medical': ['ФИО', 'Фамилия', 'Имя', 'Отчество', 'ДатаРождения', 'Полис',
+                'СНИЛС', 'Телефон', 'Адрес', 'Диагноз'],
+}
+
+
 
 def mask_fio(value: str) -> str:
-    """«Иванов Иван Иванович» -> «Иванов И. И.»."""
-    return _FIO_RE.sub(lambda m: f'{m.group(1)} {m.group(2)[0]}. {m.group(3)[0]}.',
-                       value)
+    """«Иванов Иван Иванович»→«Иванов И. И.»; «Иванов Иван»→«Иванов И.»;
+    любой регистр (иванов иван иванович) — тоже маскируется."""
+    def repl(m: re.Match[str]) -> str:
+        last = m.group('last')
+        first = m.group('first')
+        mid = m.group('mid')
+        parts = [last]
+        if first:
+            parts.append(f'{first[0]}.')
+        if mid:
+            parts.append(f'{mid[0]}.')
+        return ' '.join(parts)
+    return _FIO_RE.sub(repl, value)
 
 
 def mask_phone(value: str) -> str:
@@ -55,24 +90,45 @@ def _mask_by_pattern(value: str) -> str:
     return v
 
 
-def _hash_token(value: str) -> str:
-    """Детерминированный псевдоним строки (необратимо, но стабильно)."""
-    return hashlib.sha256(value.encode('utf-8')).hexdigest()[:12]
+def _resolve_secret(secret: str | None) -> str:
+    """Секрет для HMAC: параметр → env ONEC_HASH_SECRET → fallback с warning."""
+    global _warned_no_secret
+    if secret:
+        return secret
+    env = os.environ.get('ONEC_HASH_SECRET', '')
+    if env:
+        return env
+    if not _warned_no_secret:
+        _warned_no_secret = True
+        warnings.warn(
+            'ONEC_HASH_SECRET не задан — используется фиксированная соль; '
+            'задайте переменную окружения для реальной защиты данных '
+            '(псевдоним без ключа восстановим).',
+            UserWarning, stacklevel=3)
+    return _FALLBACK_SECRET
+
+
+def _hash_token(value: str, secret: str | None = None) -> str:
+    """HMAC-SHA256-псевдоним строки (стабильно, без ключа невосстановимо)."""
+    key = _resolve_secret(secret).encode('utf-8')
+    return hmac.new(key, value.encode('utf-8'), hashlib.sha256).hexdigest()
 
 
 class Anonymizer:
     """Маскирование реквизитов объекта при выгрузке.
 
     fields: имена реквизитов, значения которых маскируются по паттернам
-            (или заменяются хешем, если pattern=False).
-    mode: 'mask' — частичное скрытие (ФИО/телефоны/ИНН), 'hash' — полная
-          замена хешем (для ключевых полей типа Фамилия).
+            (или заменяются хешем, если mode='hash').
+    mode: 'mask' — частичное скрытие (ФИО/телефоны/ИНН), 'hash' — псевдоним
+          HMAC (для ключевых полей типа Фамилия).
+    secret: секрет для HMAC (иначе env ONEC_HASH_SECRET / fallback).
     """
 
     def __init__(self, fields: list[str] | None = None,
-                 mode: str = 'mask') -> None:
+                 mode: str = 'mask', secret: str | None = None) -> None:
         self.fields = set(fields or [])
         self.mode = mode
+        self._secret = secret
 
     def apply(self, record: dict[str, Any]) -> dict[str, Any]:
         """Возвращает копию записи с замаскированными реквизитами."""
@@ -83,7 +139,7 @@ class Anonymizer:
             if self.fields and name not in self.fields:
                 continue
             if self.mode == 'hash':
-                out[name] = _hash_token(value)
+                out[name] = _hash_token(value, self._secret)
             else:
                 out[name] = _mask_by_pattern(value)
         return out

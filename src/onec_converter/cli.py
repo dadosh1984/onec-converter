@@ -385,6 +385,22 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     return 0 if problems == 0 else 1
 
 
+def cmd_cache(args: argparse.Namespace) -> int:
+    """Кеш: stats — статистика, clear — полная очистка (Фаза 18)."""
+    from .cache import Cache
+
+    c = Cache(Path(args.root_dir if getattr(args, 'root_dir', '') else '.onec_cache'))
+    action = getattr(args, 'sub', 'stats') or 'stats'
+    if action == 'clear':
+        c.clear()
+        print(json.dumps({'ok': True, 'action': 'clear'}))
+    else:
+        st = c.stats()
+        st['ok'] = True
+        print(json.dumps(st, ensure_ascii=False))
+    return 0
+
+
 # ---- entry point ----
 
 def build_parser() -> argparse.ArgumentParser:
@@ -451,6 +467,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser('doctor', help='Диагностика окружения (Фаза 17): зависимости/кеш')
 
+    p_cache = sub.add_parser('cache', help='Кеш: stats / clear (Фаза 18)')
+    p_cache.add_argument('sub', nargs='?', default='stats',
+                         choices=['stats', 'clear'])
+    p_cache.add_argument('--root-dir', default='', help='Каталог кеша')
+
     return p
 
 
@@ -467,6 +488,7 @@ def main(argv: list[str] | None = None) -> int:
         'guid-diff': cmd_guid_diff,
         'config-versions': cmd_config_versions,
         'doctor': cmd_doctor,
+        'cache': cmd_cache,
     }
     try:
         handler = handlers.get(args.command or '')

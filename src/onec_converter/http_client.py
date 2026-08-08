@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -43,13 +43,18 @@ class HttpClient83:
     retries: int = 3
     batch_size: int = 500
     transport: httpx.AsyncBaseTransport | None = None
+    api_key: str | None = None
     _client: httpx.AsyncClient | None = field(default=None, init=False, repr=False)
 
     async def client(self) -> httpx.AsyncClient:
         if self._client is None:
+            headers: dict[str, str] = {}
+            if self.api_key:
+                headers['X-API-Key'] = self.api_key
             self._client = httpx.AsyncClient(base_url=self.base_url,
                                              timeout=httpx.Timeout(self.timeout),
-                                             transport=self.transport)
+                                             transport=self.transport,
+                                             headers=headers)
         return self._client
 
     async def aclose(self) -> None:
@@ -59,19 +64,27 @@ class HttpClient83:
 
     async def _request(self, method: str, path: str, json: Any = None) -> dict[str, Any]:
         c = await self.client()
-        last: Exception | None = None
+        last_error: str | None = None
         for attempt in range(self.retries):
             try:
                 r = await c.request(method, path, json=json)
                 if r.status_code in (200, 201):
-                    data: dict[str, Any] = r.json()
-                    return data
-                if r.status_code in (400, 409):
-                    raise HttpServiceError(f'HTTP {r.status_code}: {r.text[:500]}')
+                    return cast(dict[str, Any], r.json())
+                if 400 <= r.status_code < 500:
+                    # клиентская ошибка: ретраить бесполезно, вернуться с подробностью
+                    raise HttpServiceError(
+                        f'HTTP {r.status_code}: {r.text[:500]}')
+                # 5xx/другие — ретрай с экспоненциальной задержкой
+                last_error = f'HTTP {r.status_code}: {r.text[:200]}'
             except httpx.TransportError as exc:
-                last = exc
+                last_error = f'transport: {exc!r}'
+                if attempt + 1 < self.retries:
+                    await asyncio.sleep(2 ** attempt * 0.5)
+                continue
+            if attempt + 1 < self.retries:
                 await asyncio.sleep(2 ** attempt * 0.5)
-        raise HttpServiceError(f'транспортная ошибка после {self.retries} попыток: {last}')
+        raise HttpServiceError(
+            f'после {self.retries} попыток: {last_error or "нет ответа"}')
 
     async def metadata(self) -> dict[str, Any]:
         return await self._request('GET', '/metadata')
