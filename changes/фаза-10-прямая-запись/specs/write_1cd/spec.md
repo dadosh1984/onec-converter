@@ -1,4 +1,4 @@
-# Spec: write-1cd
+# Spec: write_1cd
 
 ## Purpose
 
