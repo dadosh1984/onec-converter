@@ -523,9 +523,35 @@ def cmd_clone_db(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_techlog(args: argparse.Namespace) -> int:
+    """Техжурнал 1С как источник событий (Фаза 26): каталог логов,
+    фильтры --process/--event/--level-min, --tail, --out JSON."""
+    from .source_techlog import TechLog, TechLogError
+
+    try:
+        rep = TechLog(args.source_dir).read_events(
+            process=args.process, event=args.event,
+            level_min=args.level_min, tail=args.tail, out_file=args.out)
+    except TechLogError as exc:
+        return _err(str(exc))
+    print(json.dumps(rep, ensure_ascii=False, default=str))
+    return 0
+
+
+def cmd_fetch_config(args: argparse.Namespace) -> int:
+    """Релиз конфигурации (XML-выгрузка) как источник метаданных
+    (Фаза 26): {objects: [kind, name, uuid]} без платформы."""
+    from .fetch_config import FetchConfigError, fetch_config
+
+    try:
+        rep = fetch_config(args.source, args.out)
+    except FetchConfigError as exc:
+        return _err(str(exc))
+    print(json.dumps(rep, ensure_ascii=False, default=str))
+    return 0
+
+
 def cmd_audit(args: argparse.Namespace) -> int:
-    """Просмотр/фильтр журнала аудита (Фаза 25): --level, --op, --obj,
-    --tail (последние N). Без --json — читаемые строки + сводка."""
     try:
         recs = read_audit(args.file)
     except (OSError, ValueError) as exc:
@@ -672,6 +698,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_audit.add_argument('--tail', type=int, default=0, help='последние N записей')
     p_audit.add_argument('--json', action='store_true', help='полные JSON-записи')
 
+    p_tl = sub.add_parser('techlog',
+                          help='Техжурнал 1С как источник событий (Фаза 26)')
+    p_tl.add_argument('--source-dir', required=True,
+                      help='каталог техжурнала (файлы *.log/*.lgp)')
+    p_tl.add_argument('--process', default='', help='процесс: rphost/rmngr/1CV8')
+    p_tl.add_argument('--event', default='', help='событие: SDBL/EXCP/TTIMEOUT')
+    p_tl.add_argument('--level-min', type=int, default=0,
+                      help='уровень события >= (0..5)')
+    p_tl.add_argument('--tail', type=int, default=0, help='последние N событий')
+    p_tl.add_argument('--out', default='', help='запись JSON-файл')
+
+    p_fc = sub.add_parser('fetch-config',
+                          help='Релиз конфигурации (XML-выгрузка) как источник'
+                               ' метаданных (Фаза 26)')
+    p_fc.add_argument('--source', required=True,
+                      help='каталог XML-выгрузки (Configuration.xml)')
+    p_fc.add_argument('--out', default='', help='запись JSON-файл')
+
     return p
 
 
@@ -697,6 +741,8 @@ def main(argv: list[str] | None = None) -> int:
         'metrics': cmd_metrics,
         'clone-db': cmd_clone_db,
         'audit': cmd_audit,
+        'techlog': cmd_techlog,
+        'fetch-config': cmd_fetch_config,
     }
     try:
         handler = handlers.get(args.command or '')

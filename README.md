@@ -138,6 +138,21 @@ onec-converter clone-db --source-dir 1C_8.1 --target-dir stand/ \
 `load` автоматически сохраняет `workdir/snapshot.1CD` приёмника до записи
 (откат при сбое); отключить: `--no-snapshot`.
 
+### techlog — техжурнал 1С как источник (Фаза 26)
+```
+onec-converter techlog --source-dir ./logs --process rphost --event EXCP     --level-min 3 --tail 50 --out events.json
+```
+События (SDBL/EXCP/TTIMEOUT, процесс, направленность, поля) — диагностика
+активности и ошибок платформы до/после переноса.
+
+### fetch-config — релиз конфигурации как источник (Фаза 26)
+```
+onec-converter fetch-config --source ./release --out meta.json
+```
+Метаданные конфигурации {kind, name, uuid} из XML-выгрузки 1С
+(Configuration.xml) — структура приёмника без платформы. Двоичные .cf
+не поддерживаются (честная ошибка с подсказкой).
+
 ### audit — журнал переноса (Фаза 25)
 ```
 onec-converter load --direct ./tgt --input batch.json --workdir ./work     --audit-file audit.jsonl        # extract/transform/load пишут события
