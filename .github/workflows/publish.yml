@@ -23,7 +23,7 @@ jobs:
       - name: Verify tag matches version
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          EXPECTED=$(python -c 'from onec_converter import __version__; print(__version__)')
+          EXPECTED=$(PYTHONPATH=src python -c 'from onec_converter import __version__; print(__version__)')
           if [ "$TAG" != "$EXPECTED" ]; then
             echo "Тег v$TAG, а версия пакета $EXPECTED — не совпадают"
             exit 1
