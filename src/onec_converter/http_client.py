@@ -62,7 +62,8 @@ class HttpClient83:
             try:
                 r = await c.request(method, path, json=json)
                 if r.status_code in (200, 201):
-                    return r.json()
+                    data: dict[str, Any] = r.json()
+                    return data
                 if r.status_code in (400, 409):
                     raise HttpServiceError(f'HTTP {r.status_code}: {r.text[:500]}')
             except httpx.TransportError as exc:
