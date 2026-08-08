@@ -120,6 +120,24 @@ mypy src
 - `query_table` — консоль запросов с фильтрами `Поле=знач; Поле>10` (RequestConsole9000).
 - `dump_metadata` — экспорт метаданных в YAML/JSON для git-диффов (GitConverter).
 
+## Сквозной перенос 7.7→8.3 (Фаза 7, `docs/pipeline.md`)
+
+Полный сценарий одной командой — MCP-тул `migrate(project_dir, source_ib_id,
+target_ib_id, source_dir, target_url, rules, out_file, source_encoding)`:
+init → inspect_source → extract → map → transform → prevalidate → load
+(HTTP /load приёмника 8.3). Каждый шаг логируется в терминал и возвращается
+в `steps` ответа с временем; при ошибке — частичный прогресс и код ошибки.
+
+```
+[onec-converter 17:55:01] ─── шаг 1/7: init
+[onec-converter 17:55:01] ▶ step_init(...)
+…
+```
+
+Сквозные тесты (tests/test_pipeline_e2e.py): синтетика 7.7 (cp866 и cp1251)
+→ TOON-правила → transform → validate → HTTP-mock приёмника 8.3;
+контроль количества записей, кодировок (UTF-8), правила 1→1.
+
 ## Документация форматов
 - `docs/format-77.md` — текстовый формат ИБ 7.7 (`1Cv77.dat`, `1Cv7.MD`).
 - `docs/format-8x.md` — формат `1Cv8.1CD` (1CD 8.3.8.0), конфигурация, DBSCHEMA.

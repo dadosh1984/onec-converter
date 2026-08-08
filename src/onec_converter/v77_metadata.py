@@ -11,10 +11,9 @@ CalcVar, Subconto, ...), объекты конфигурации (storage 'Docum
 
 from __future__ import annotations
 
+import olefile
 from dataclasses import dataclass
 from pathlib import Path
-
-import olefile
 
 
 class MetadataError(Exception):
@@ -37,7 +36,7 @@ class V77Metadata:
         self.path = Path(md_path)
         try:
             self._ole = olefile.OleFileIO(str(self.path))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — любые ошибки olefile
             raise MetadataError(f'не удалось открыть 1Cv7.MD: {exc}') from exc
 
     def close(self) -> None:

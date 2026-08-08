@@ -28,7 +28,7 @@ class LoadResult:
         return not self.errors
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> LoadResult:
+    def from_payload(cls, payload: dict[str, Any]) -> 'LoadResult':
         return cls(created=int(payload.get('created', 0)),
                    updated=int(payload.get('updated', 0)),
                    errors=list(payload.get('errors', [])))
@@ -62,8 +62,7 @@ class HttpClient83:
             try:
                 r = await c.request(method, path, json=json)
                 if r.status_code in (200, 201):
-                    data: dict[str, Any] = r.json()
-                    return data
+                    return r.json()
                 if r.status_code in (400, 409):
                     raise HttpServiceError(f'HTTP {r.status_code}: {r.text[:500]}')
             except httpx.TransportError as exc:

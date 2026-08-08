@@ -1,7 +1,10 @@
 """Unit-тесты http-клиента на моке HTTP-сервиса."""
 import pytest
+import httpx
 
-from onec_converter.http_client import HttpClient83, HttpServiceError
+from onec_converter.http_client import HttpClient83, HttpServiceError, LoadResult
+
+import pytest_asyncio
 
 
 @pytest.mark.asyncio

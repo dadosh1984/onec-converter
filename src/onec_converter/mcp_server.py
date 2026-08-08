@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import json
 from collections.abc import Callable
@@ -500,3 +501,107 @@ def playbook() -> str:
                        'sequence': _playbook_summary(),
                        'next': PLAYBOOK_NEXT.get('playbook', 'tools()')},
                       ensure_ascii=False)
+
+
+@visible_tool('migrate', 'Сквозной перенос 7.7→8.3 (Фаза 7): init → inspect → extract → map → transform → validate → load')
+def migrate(project_dir: str, source_ib_id: str, target_ib_id: str,
+            source_dir: str, target_url: str, rules: str = '{}',
+            out_file: str = '', source_encoding: str = 'cp866') -> str:
+    """Полный сценарий переноса данных 7.7 в приёмник 8.3 одной командой.
+
+    Выполняет шаги пайплайна последовательно (каждый логируется в терминал):
+      init → inspect_source → extract → map (валидация правил) →
+      transform (применение правил) → prevalidate → load (HTTP /load).
+    `rules` — JSON TOON-правил (см. step_map); `target_url` — HTTP-сервис
+    приёмника 8.3; `out_file` — промежуточный JSON (пусто = временный).
+    Реальные базы не изменяются: запись только через HTTP-сервис приёмника.
+    """
+    from .terminal import playbook_step
+    from .transform import transform_object
+
+    steps: list[dict[str, Any]] = []
+
+    def log(name: str, ok: bool, ms: float, summary: str) -> None:
+        steps.append({'name': name, 'ok': ok, 'ms': round(ms, 1), 'summary': summary})
+
+    st = PipelineState(Path(project_dir))
+    try:
+        playbook_step(1, 7, 'init')
+        t0 = now_ms()
+        r = st.step_init(project_dir, source_ib_id, target_ib_id,
+                         source_dir, source_encoding=source_encoding)
+        log('init', bool(r.get('ok')), now_ms() - t0, str(r.get('binding')))
+
+        playbook_step(2, 7, 'inspect_source')
+        t0 = now_ms()
+        r = st.step_inspect_source()
+        meta_source = r['metadata']
+        log('inspect_source', bool(r.get('ok')), now_ms() - t0,
+            f"references={meta_source.get('references_tables')}")
+
+        playbook_step(3, 7, 'extract')
+        t0 = now_ms()
+        out = out_file or str(Path(project_dir) / 'intermediate.json')
+        r = st.step_extract(out)
+        log('extract', bool(r.get('ok')), now_ms() - t0, f"objects={r.get('objects')}")
+
+        playbook_step(4, 7, 'map (правила TOON)')
+        t0 = now_ms()
+        parsed_rules: dict[str, Any] = json.loads(rules) if rules.strip() else {}
+        r = st.step_map(meta_source, {}, parsed_rules)
+        log('map', bool(r.get('ok')), now_ms() - t0,
+            'ok' if r.get('ok') else f"errors={r.get('errors')}")
+        if not r.get('ok'):
+            raise ValueError(f'правила маппинга невалидны: {r.get("errors")}')
+
+        playbook_step(5, 7, 'transform')
+        t0 = now_ms()
+        transformed: list[dict[str, Any]] = []
+        for obj in st.extracted:
+            for rule in parsed_rules.get('objects', []):
+                if rule.get('source') == obj.get('type'):
+                    transformed.append(transform_object(obj, rule, resolver=None))  # type: ignore[arg-type]
+                    break
+        log('transform', True, now_ms() - t0, f"objects={len(transformed)}")
+
+        playbook_step(6, 7, 'prevalidate')
+        t0 = now_ms()
+        vr = validate_batch(transformed)
+        log('prevalidate', vr.ok, now_ms() - t0,
+            f"counts={vr.counts}, errors={len(vr.errors)}")
+        if not vr.ok:
+            raise ValueError(f'предвалидация не прошла: {vr.errors[:5]}')
+
+        playbook_step(7, 7, 'load')
+        t0 = now_ms()
+        try:
+            created = _http_load(transformed, source_ib_id, target_ib_id, target_url)
+            log('load', True, now_ms() - t0, f"created={created}")
+        except Exception as exc:
+            log('load', False, now_ms() - t0, str(exc))
+            raise
+
+        st._mark('migrate')
+        return json.dumps({'ok': True, 'created': created,
+                           'objects': len(transformed), 'steps': steps,
+                           'next': 'verify — сверка источник↔приёмник (полнота переноса)'},
+                          ensure_ascii=False)
+    except Exception as exc:  # noqa: BLE001 — MCP-тул возвращает ошибку строкой
+        return json.dumps({'ok': False, 'error': str(exc), 'steps': steps},
+                          ensure_ascii=False)
+
+
+def _http_load(objects: list[dict[str, Any]], source_ib: str, target_ib: str,
+               target_url: str) -> int:
+    """Загрузка через HTTP-сервис приёмника (async внутри sync-тула)."""
+    from .http_client import HttpClient83
+
+    async def run() -> int:
+        client = HttpClient83(target_url)
+        try:
+            results = await client.load(objects, source_ib, target_ib)
+        finally:
+            await client.aclose()
+        return sum(r.created for r in results)
+
+    return asyncio.run(run())
