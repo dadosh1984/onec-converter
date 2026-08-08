@@ -138,6 +138,14 @@ onec-converter clone-db --source-dir 1C_8.1 --target-dir stand/ \
 `load` автоматически сохраняет `workdir/snapshot.1CD` приёмника до записи
 (откат при сбое); отключить: `--no-snapshot`.
 
+### export-kd3 — правила TOON в XML КД3-стиля (Фаза 29)
+```
+onec-converter export-kd3 --rules rules.json --out kd3.xml
+```
+XML-представление правил (DataContainer/Rules/Attributes/EnumMappings) для
+ревью и переноса (авторский формат в стиле КД3). Карта всех команд —
+`docs/commands-map.md`.
+
 ### Разработка и качество (Фаза 28)
 ```
 onec-converter sonar-report --target src --format xml --out sonar.xml

@@ -283,6 +283,18 @@ async def _http_load(objs: list[dict[str, Any]],
     return created, updated, errors
 
 
+def cmd_export_kd3(args: argparse.Namespace) -> int:
+    """Экспорт правил TOON в XML в стиле КД3 (Фаза 29.2) — ревью/перенос."""
+    from .kd3_export import Kd3Error, export_kd3
+
+    try:
+        rep = export_kd3(args.rules, args.out)
+    except Kd3Error as exc:
+        return _err(str(exc))
+    print(json.dumps(rep, ensure_ascii=False))
+    return 0
+
+
 def cmd_sonar_report(args: argparse.Namespace) -> int:
     """Отчёт ruff в sonar-формате (Фаза 28): --format xml|json, --target,
     --out — запись в файл для CI-артефакта."""
@@ -808,6 +820,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_sr.add_argument('--out', default='',
                       help='запись отчёта в файл (иначе stdout)')
 
+    p_kd3 = sub.add_parser('export-kd3',
+                           help='Экспорт правил TOON в XML в стиле КД3 (Фаза 29.2)')
+    p_kd3.add_argument('--rules', required=True, help='файл правил rules.json')
+    p_kd3.add_argument('--out', default='', help='запись XML-файла')
+
     return p
 
 
@@ -837,6 +854,7 @@ def main(argv: list[str] | None = None) -> int:
         'fetch-config': cmd_fetch_config,
         'dump-report': cmd_dump_report,
         'sonar-report': cmd_sonar_report,
+        'export-kd3': cmd_export_kd3,
     }
     try:
         handler = handlers.get(args.command or '')

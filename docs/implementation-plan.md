@@ -127,14 +127,14 @@ Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
 подходящие идеи из аудита и проверить взаимосвязи между командами.
 
 ### 29.1. Инвентаризация и взаимосвязи команд
-- [ ] [spike] Карта команд: CLI (13) + MCP-туллы (15) — входы/выходы, поток данных
+- [ ] [spike] Карта команд: CLI (13) + MCP-туллы (15) — входы/выходы, поток данных ✅
       между ними (inspect→extract→map→transform→load→verify), общие аргументы,
       next-подсказки MCP → docs/commands-map.md
-- [ ] [fact] Проверка взаимосвязей: каждая команда реально вызывается в пайплайне;
+- [ ] [fact] Проверка взаимосвязей: каждая команда реально вызывается в пайплайне; ✅
       нет «мёртвых» команд/тулов, аргументы согласованы (одни и те же флаги
       --source-dir/--out и т.д.), next-цепочки корректны (см. playbook)
-- [ ] [fact] Устранение рассинхронов (если найдены): документировать/чинить
-- [ ] [fact] Сокращение MCP-туллов (устранить дубли через --format):
+- [ ] [fact] Устранение рассинхронов (если найдены): документировать/чинить ✅
+- [ ] [fact] Сокращение MCP-туллов (устранить дубли через --format): ✅
       объединить `query_table`→`query_sql` (удалить старый), 
       `table_sizes`/`table_sizes_report`→`table_sizes --format json|xlsx`,
       `structure_report`/`compare_structures`→`compare_structures --format json|xlsx`
@@ -145,7 +145,7 @@ Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
 ### 29.2. Внедрение навыков (идей) в команды
 По каждой команде — модернизация с идеями из `docs/ideas-audit-2026.md`:
 
-- [ ] [fact] `inspect`/`search_schema` — расширить на документы/регистры/синонимы
+- [ ] [fact] `inspect`/`search_schema` — расширить на документы/регистры/синонимы ✅
       (идея 1CDBStorageStructureInfo: двунаправленный поиск)
       и техжурнал-источник (Фаза 26) как опцию --source-type
 - [x] [fact] **Селективный перенос по разделам** (требование пользователя):
@@ -155,35 +155,35 @@ Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
       без --objects — перенос ВСЕХ данных (по умолчанию); MCP `step_extract`
       — параметр `objects`; список доступных разделов — через `inspect`
       и техжурнал-источник (Фаза 26) как опцию --source-type ✅
-- [ ] [fact] `map`/`transform` — экспорт правил TOON в XML КД3 (`export-kd3`,
+- [ ] [fact] `map`/`transform` — экспорт правил TOON в XML КД3 (`export-kd3`, ✅
       идея ConversionRulesLoader); fuzzy-подсказка полей (идея OpenIntegrations)
-- [ ] [fact] `load`/`load_direct` — OAuth2/JWT (Фаза 22), snapshot (Фаза 24),
+- [ ] [fact] `load`/`load_direct` — OAuth2/JWT (Фаза 22), snapshot (Фаза 24), ✅
       audit-лог (Фаза 25), Telegram-уведомление (Фаза 27) — флаги/конфиг
-- [ ] [fact] `query`/`query_sql` — health-тул базы (Фаза 27) рядом; добавить
+- [ ] [fact] `query`/`query_sql` — health-тул базы (Фаза 27) рядом; добавить ✅
       EXPLAIN-подобный вывод плана (идея consquery/RequestConsole9000)
-- [ ] [fact] `guid-diff`/`config-versions` — анализ модулей/расширений
+- [ ] [fact] `guid-diff`/`config-versions` — анализ модулей/расширений ✅
       (идеи bsl-parser/diff3cf): дифф по модулям конфигурации
-- [ ] [fact] `doctor` — расширить диагностику: OAuth2-конфиг, S3, место под кеш
+- [ ] [fact] `doctor` — расширить диагностику: OAuth2-конфиг, S3, место под кеш ✅
       (порог), версия платформы если доступна (v8runner)
-- [ ] [fact] `cache` — TTL/лимит размера (идея: бесконтрольный рост), авто-очистка
+- [ ] [fact] `cache` — TTL/лимит размера (идея: бесконтрольный рост), авто-очистка ✅
       старых; stats показывает возраст
-- [ ] [fact] `dump-records` — формат csv: quoting/разделители (идея: читаемость),
+- [ ] [fact] `dump-records` — формат csv: quoting/разделители (идея: читаемость), ✅
       опция --where (фильтр как в query)
-- [ ] [fact] `metrics` — pushgateway-режим и APDEX (идея 1C_PrometheusExporter);
+- [ ] [fact] `metrics` — pushgateway-режим и APDEX (идея 1C_PrometheusExporter); ✅
       метрики строк/сек и ошибок
-- [ ] [fact] `migrate` (MCP) — обновить next-цепочку под новые туллы
+- [ ] [fact] `migrate` (MCP) — обновить next-цепочку под новые туллы ✅
       (base_health, export-kd3); прогресс-события
-- [ ] [fact] `dump_metadata` — git-совместимый дифф (идея GitConverter): вывод
+- [ ] [fact] `dump_metadata` — git-совместимый дифф (идея GitConverter): вывод ✅
       построчный, стабильный порядок для чистых git-диффов
 
 ### 29.3. Тесты и верификация взаимосвязей
-- [ ] [fact] Тест карты команд: каждая CLI-команда имеет --help и handler;
+- [ ] [fact] Тест карты команд: каждая CLI-команда имеет --help и handler; ✅
       каждый MCP-тул зарегистрирован и вызывается (smoke)
-- [ ] [fact] Сквозной e2e по цепочке команд (inspect→extract→map→transform→load)
+- [ ] [fact] Сквозной e2e по цепочке команд (inspect→extract→map→transform→load) ✅
       на синтетике — подтверждает согласованность аргументов и данных
-- [ ] [assumption] docs/commands-map.md + README: сводная таблица команд,
+- [ ] [assumption] docs/commands-map.md + README: сводная таблица команд, ✅
       их связей и внедрённых навыков
-- [ ] [assumption] pytest (все), ruff, mypy strict, vitest — зелёные
+- [ ] [assumption] pytest (все), ruff, mypy strict, vitest — зелёные ✅
 
 ---
 
