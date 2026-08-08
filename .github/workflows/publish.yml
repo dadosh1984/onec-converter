@@ -20,6 +20,16 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Verify tag matches version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          EXPECTED=$(python -c 'from onec_converter import __version__; print(__version__)')
+          if [ "$TAG" != "$EXPECTED" ]; then
+            echo "Тег v$TAG, а версия пакета $EXPECTED — не совпадают"
+            exit 1
+          fi
+          echo "OK: тег v$TAG == версия $EXPECTED"
+
       - name: Install build tools
         run: pip install build twine
 
@@ -49,4 +59,4 @@ jobs:
           gh release create "$VERSION" \
             --title "$VERSION" \
             --notes "См. CHANGELOG.md — публикация по тегу $VERSION." \
-            dist/* || echo "релиз уже существует"
+            dist/*.tar.gz dist/*.whl || echo "релиз уже существует"
