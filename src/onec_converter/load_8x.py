@@ -157,15 +157,19 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
                 workdir: str | Path | None = None,
                 verify_after: bool = True,
                 max_objects: int | None = None,
-                strict: bool = False) -> dict[str, Any]:
+                strict: bool = False,
+                snapshot: bool = True) -> dict[str, Any]:
     """Прямая запись объектов в КОПИЮ приёмника; оригинал не изменяется.
 
     Возвращает {'ok', 'copy_path', 'total', 'tables', 'ref_warnings',
-    'verify'}. Документы и табличные части (Фаза 15): REF-поля резолвятся в
-    _IDRREF приёмника, ненайденные — 16 нулей + ref_warnings. Атомарный
-    replace (Фаза 16): пишем во временный work-файл, по завершении заменяем;
-    verify_after читает записанное парсером и сверяет без потерь;
-    max_objects — лимит размера батча (LoadError при превышении).
+    'verify', 'snapshot'}. Документы и табличные части (Фаза 15): REF-поля
+    резолвятся в _IDRREF приёмника, ненайденные — 16 нулей + ref_warnings.
+    Атомарный replace (Фаза 16): пишем во временный work-файл, по
+    завершении заменяем; verify_after читает записанное парсером и сверяет
+    без потерь; max_objects — лимит размера батча (LoadError при
+    превышении). snapshot (Фаза 24): до записи копия приёмника
+    сохраняется в workdir/snapshot.1CD — откат при сбое; `snapshot=False`
+    (--no-snapshot) отключает.
     """
     target = Path(target_dir)
     if max_objects is not None and len(objects) > max_objects:
@@ -175,6 +179,9 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
         raise LoadError(f'нет 1Cv8.1CD в {target_dir}')
     wd = Path(workdir) if workdir else Path(tempfile.mkdtemp(prefix='onec_load_'))
     wd.mkdir(parents=True, exist_ok=True)
+    snap_path: Path | None = None
+    if snapshot:
+        snap_path = copy_1cd(cd, wd / 'snapshot.1CD')
     work = wd / 'work.1CD'
     tries = 0
     while True:
@@ -278,7 +285,8 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
         report = _verify_direct(objects, final, index, prefix_by_table,
                                 idref_counter)
     return {'ok': True, 'copy_path': str(final), 'total': len(objects),
-            'tables': tables_stat, 'ref_warnings': ref_warnings, 'verify': report}
+            'tables': tables_stat, 'ref_warnings': ref_warnings, 'verify': report,
+            'snapshot': str(snap_path) if snap_path else None}
 
 
 def _cleanup_workfiles(wd: Path, keep: Path | None = None) -> None:

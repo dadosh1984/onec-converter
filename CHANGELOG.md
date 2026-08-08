@@ -3,6 +3,21 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.9.0 (2026-08)
+
+### Полный сценарий копии базы (Фаза 24: clone-db + rollback)
+- CLI `clone-db --source-dir --target-dir [--with-rules]`: полная побитовая
+  копия 1Cv8.1CD в новый каталог (оригинал read-only), кеш-сброс по новому
+  ключу (`Cache.drop`), опция «стенд» — правила маппинга рядом (target/rules/).
+- Снапшот до миграции: `load_direct` автоматически сохраняет
+  workdir/snapshot.1CD приёмника до записи (откат при сбое); опция
+  `--no-snapshot` (CLI load, MCP load_direct no_snapshot).
+- Новый модуль `clone_db.py` (CloneError); CLI-подкоманда clone-db.
+- Тесты: clone-db на синтетике (побитовая копия, rules, ошибки), CLI,
+  snapshot/restore при сбое, no-snapshot, Cache.drop (+6).
+- docs/recipes: шаг «стенд через clone-db»; README — clone-db/snapshot.
+- План: Фаза 24 ✅.
+
 ## 0.8.0 (2026-08)
 
 ### Conformance-тесты MCP + CI-гейты (Фаза 23)

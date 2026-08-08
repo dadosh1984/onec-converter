@@ -35,6 +35,17 @@ def test_cache_stats(tmp_path: Path):
     assert st['files'] == 2 and st['bytes'] == 8
 
 
+def test_cache_drop(tmp_path: Path):
+    """Фаза 24: инвалидация одного ключа (clone-db кеш-сброс)."""
+    c = Cache(tmp_path / 'cache')
+    c.put('k1', 'a', b'123')
+    c.put('k2', 'b', b'456')
+    c.drop('k1')
+    assert c.get('k1', 'a') is None
+    assert c.get('k2', 'b') is not None  # другие ключи целы
+    c.drop('k1')  # повторный drop не падает
+
+
 # ---- Strict Mode ----
 class _FM:
     def __init__(self, name, ftype, length=0, precision=0):

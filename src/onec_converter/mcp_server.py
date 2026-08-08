@@ -528,12 +528,14 @@ def config_versions(source_dir: str) -> str:
 
 
 @visible_tool('load_direct', 'Прямая загрузка в 1CD без HTTP-расширения: объекты → копия 1Cv8.1CD приёмника (Фаза 13, zero-setup A)')
-def load_direct(target_dir: str, input_file: str, workdir: str = '') -> str:
+def load_direct(target_dir: str, input_file: str, workdir: str = '',
+                no_snapshot: bool = False) -> str:
     """Прямая запись объектов (батч после transform) в КОПИЮ приёмника.
 
-    Оригинал не изменяется; копия создаётся в workdir (или temp).
-    Возвращает {ok, copy_path, total, tables}. Ограничения MVP —
-    docs/zero-setup.md.
+    Оригинал не изменяется; копия создаётся в workdir (или temp). До записи
+    сохраняется workdir/snapshot.1CD (откат при сбое, Фаза 24);
+    no_snapshot=true отключает. Возвращает {ok, copy_path, total, tables,
+    snapshot}. Ограничения MVP — docs/zero-setup.md.
     """
     from .intermediate import load_json_batch
     from .load_8x import LoadError
@@ -545,7 +547,8 @@ def load_direct(target_dir: str, input_file: str, workdir: str = '') -> str:
                           ensure_ascii=False)
     objs = load_json_batch(p)
     try:
-        rep = _load_direct(target_dir, objs, workdir or None)
+        rep = _load_direct(target_dir, objs, workdir or None,
+                           snapshot=not no_snapshot)
     except LoadError as exc:
         return json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False)
     return json.dumps(rep, ensure_ascii=False, default=str)

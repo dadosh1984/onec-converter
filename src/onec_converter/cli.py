@@ -279,7 +279,8 @@ def cmd_load(args: argparse.Namespace) -> int:
         from .load_8x import LoadError, load_direct
 
         try:
-            rep = load_direct(args.direct, objs, workdir=args.workdir or None)
+            rep = load_direct(args.direct, objs, workdir=args.workdir or None,
+                              snapshot=not args.no_snapshot)
         except LoadError as exc:
             return _err(str(exc))
         print(json.dumps(rep, ensure_ascii=False, default=str))
@@ -497,6 +498,19 @@ def cmd_metrics(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_clone_db(args: argparse.Namespace) -> int:
+    """Полная копия файловой ИБ (1Cv8.1CD) в новый каталог + кеш-сброс
+    (Фаза 24). --with-rules — сценарий «стенд»: база + правила маппинга."""
+    from .clone_db import CloneError, clone_db
+
+    try:
+        rep = clone_db(args.source_dir, args.target_dir, args.with_rules)
+    except CloneError as exc:
+        return _err(str(exc))
+    print(json.dumps(rep, ensure_ascii=False, default=str))
+    return 0
+
+
 # ---- entry point ----
 
 def build_parser() -> argparse.ArgumentParser:
@@ -544,6 +558,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help='каталог приёмника 8.x: запись в копию 1CD (Фаза 13)')
     p_load.add_argument('--workdir', default='',
                         help='каталог для копии приёмника (--direct)')
+    p_load.add_argument('--no-snapshot', action='store_true',
+                        help='не сохранять snapshot.1CD приёмника до записи (Фаза 24)')
     p_load.add_argument('--source-ib', default='source')
     p_load.add_argument('--target-ib', default='target')
     p_load.add_argument('--api-key', default='',
@@ -592,6 +608,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser('metrics', help='Метрики в формате Prometheus (Фаза 21)')
 
+    p_clone = sub.add_parser('clone-db',
+                             help='Полная копия файловой ИБ в новый каталог (Фаза 24)')
+    p_clone.add_argument('--source-dir', required=True,
+                         help='каталог оригинала с 1Cv8.1CD (read-only)')
+    p_clone.add_argument('--target-dir', required=True,
+                         help='каталог копии (создаётся)')
+    p_clone.add_argument('--with-rules', default='',
+                         help='скопировать файл правил маппинга рядом (стенд)')
+
     return p
 
 
@@ -611,6 +636,7 @@ def main(argv: list[str] | None = None) -> int:
         'cache': cmd_cache,
         'dump-records': cmd_dump_records,
         'metrics': cmd_metrics,
+        'clone-db': cmd_clone_db,
     }
     try:
         handler = handlers.get(args.command or '')

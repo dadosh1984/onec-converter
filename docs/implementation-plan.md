@@ -36,13 +36,13 @@
 
 Идеи: arkuznetsov/cpdb (копирование базы+MSSQL), Tavalik/Perezalivator (перезаливка).
 
-- [ ] [fact] `onec-converter clone-db --source-dir --target-dir`: полная копия
+- [ ] [fact] `onec-converter clone-db --source-dir --target-dir`: полная копия ✅
       структуры+данных файловой ИБ в новый каталог (файл-копия + кеш-сброс)
-- [ ] [fact] `clone-db --with-rules`: вместе с правилами маппинга (сценарий «стенд»)
-- [ ] [fact] снапшот до миграции: `load_direct` — автоматический `workdir/snapshot.1CD`
+- [ ] [fact] `clone-db --with-rules`: вместе с правилами маппинга (сценарий «стенд») ✅
+- [ ] [fact] снапшот до миграции: `load_direct` — автоматический `workdir/snapshot.1CD` ✅
       до записи; опция `--no-snapshot`
-- [ ] [fact] тесты: clone-db на синтетике; snapshot/restore при сбое
-- [ ] [assumption] docs/recipes: обновить рецепт — шаг «создать стенд через clone-db»
+- [ ] [fact] тесты: clone-db на синтетике; snapshot/restore при сбое ✅
+- [ ] [assumption] docs/recipes: обновить рецепт — шаг «создать стенд через clone-db» ✅
 
 ## Фаза 25 — Audit-логирование миграции
 

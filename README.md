@@ -127,6 +127,17 @@ client_id = "migrator"
 client_secret = "..."
 ```
 
+### clone-db — полная копия базы (Фаза 24)
+```
+onec-converter clone-db --source-dir 1C_8.1 --target-dir stand/          # копия ИБ
+onec-converter clone-db --source-dir 1C_8.1 --target-dir stand/ \
+    --with-rules rules.json   # + правила маппинга рядом (сценарий «стенд»)
+```
+Полная побитовая копия `1Cv8.1CD` в новый каталог (оригинал read-only);
+кеш метаданных по новому пути инвалидируется. При `--direct`-записи
+`load` автоматически сохраняет `workdir/snapshot.1CD` приёмника до записи
+(откат при сбое); отключить: `--no-snapshot`.
+
 ### status — состояние пайплайна
 ```
 onec-converter status --project-dir project/

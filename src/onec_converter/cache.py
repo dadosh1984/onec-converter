@@ -142,3 +142,9 @@ class Cache:
                 shutil.rmtree(entry, ignore_errors=True)
             else:
                 entry.unlink(missing_ok=True)
+
+    def drop(self, key: str) -> None:
+        """Инвалидация одного ключа (напр. после пересоздания файла базы)."""
+        d = self._dir(key)
+        if d.is_dir():
+            shutil.rmtree(d, ignore_errors=True)
