@@ -4,9 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "onec-converter"
-version = "0.1.0"
+version = "0.2.0"
 description = "Перенос данных между информационными базами 1С (MCP-сервер + CLI)"
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
+authors = [{ name = "onec-converter contributors" }]
+keywords = ["1c", "1с", "onec", "1cd", "mcp", "migration", "1e-конвертация"]
+classifiers = [
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Software Development :: Libraries",
+]
 dependencies = [
     # mcp: 1.x (2.x переписан — mcp.server.fastmcp удалён); порт на 2.x — отдельная работа
     "mcp>=1.9,<2.0",
@@ -15,6 +27,9 @@ dependencies = [
     "httpx>=0.27",
     "PyYAML>=6.0",  # dump_metadata(fmt='yaml')
 ]
+
+[project.urls]
+Repository = "https://github.com/dadosh1984/onec-converter"
 
 [project.optional-dependencies]
 dev = [

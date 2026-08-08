@@ -449,6 +449,16 @@ def _jsonable(v: Any) -> Any:
     return str(v) if v is not None and not isinstance(v, (int, float, bool, str)) else v
 
 
+def cmd_metrics(_args: argparse.Namespace) -> int:
+    """Метрики в формате Prometheus (Фаза 21): кеш, операции."""
+    from .cache import Cache
+    from .metrics import render_from_timings
+    from .timings import Timings
+
+    print(render_from_timings(Timings().snapshot(), Cache().stats()))
+    return 0
+
+
 # ---- entry point ----
 
 def build_parser() -> argparse.ArgumentParser:
@@ -527,6 +537,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_dump.add_argument('--limit', type=int, default=20)
     p_dump.add_argument('--format', choices=['json', 'csv'], default='json')
 
+    sub.add_parser('metrics', help='Метрики в формате Prometheus (Фаза 21)')
+
     return p
 
 
@@ -545,6 +557,7 @@ def main(argv: list[str] | None = None) -> int:
         'doctor': cmd_doctor,
         'cache': cmd_cache,
         'dump-records': cmd_dump_records,
+        'metrics': cmd_metrics,
     }
     try:
         handler = handlers.get(args.command or '')
