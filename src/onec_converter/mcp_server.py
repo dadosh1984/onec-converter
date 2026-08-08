@@ -516,6 +516,70 @@ def query_table(source_dir: str, table: str, filters: str = '',
                       default=str)
 
 
+@visible_tool('query_sql', 'Консоль запросов конфигурации: SQL-подобная выборка (Фаза 11, E1)')
+def query_sql(source_dir: str, table: str, select: str = '*', where: str = '',
+              order_by: str = '', limit: int = 100) -> str:
+    """SQL-подобная выборка записей таблицы 1CD (идея E1).
+
+    SELECT — `*` или поля через запятую; WHERE — `f=1; g>10; name LIKE 'A%'`;
+    ORDER BY — `поле ASC|DESC`; LIMIT — число. REF-поля → {guid, name}.
+    Синтаксис WHERE совместим с query_table (C3).
+    """
+    from .query import QueryError, query_table_sql
+    from .source_8x_file import Database1CD
+
+    cd = Path(source_dir) / '1Cv8.1CD'
+    if not cd.is_file():
+        return json.dumps({'ok': False, 'error': f'нет 1Cv8.1CD в {source_dir}'},
+                          ensure_ascii=False)
+    try:
+        with Database1CD(cd) as db:
+            rows = query_table_sql(db, table, select=select, where=where,
+                                   order_by=order_by, limit=limit)
+    except QueryError as exc:
+        return json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False)
+    return json.dumps({'ok': True, 'table': table, 'count': len(rows),
+                       'rows': rows}, ensure_ascii=False, default=str)
+
+
+@visible_tool('guid_diff', 'Сверка двух баз по GUID: объекты и таблицы (Фаза 11, E2)')
+def guid_diff(source_dir: str, target_dir: str) -> str:
+    """Проверка полноты переноса по стабильным GUID (идея E2).
+
+    Объекты конфигурации (read_metadata) и таблицы (read_dbnames):
+    только-в-источнике / только-в-приёмнике / общие с расхождениями
+    имени или типа. `full` — перенос структуры завершён.
+    """
+    from .guid_diff import guid_diff as _guid_diff
+
+    try:
+        report = _guid_diff(source_dir, target_dir)
+    except (OSError, ValueError) as exc:
+        return json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False)
+    return json.dumps(report, ensure_ascii=False, default=str)
+
+
+@visible_tool('config_versions', 'Версии конфигурации из файла базы: формат, ИБ/платформа, дифф CONFIG↔CONFIGSAVE (Фаза 11, E3)')
+def config_versions(source_dir: str) -> str:
+    """Версии и сохранения конфигурации (идея E3).
+
+    Формат файла, версия ИБ и требуемая платформа (IBVERSION), статистика
+    файлов CONFIG/CONFIGSAVE/PARAMS, дифф CONFIG↔CONFIGSAVE — «что
+    изменилось с последнего сохранения».
+    """
+    from .config_versions import config_versions as _config_versions
+
+    cd = Path(source_dir) / '1Cv8.1CD'
+    if not cd.is_file():
+        return json.dumps({'ok': False, 'error': f'нет 1Cv8.1CD в {source_dir}'},
+                          ensure_ascii=False)
+    try:
+        report = _config_versions(cd)
+    except (OSError, ValueError) as exc:
+        return json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False)
+    return json.dumps(report, ensure_ascii=False, default=str)
+
+
 @visible_tool('dump_metadata', 'Дамп метаданных базы в git-дружественный текст (идея D1: GitConverter)')
 def dump_metadata(source_dir: str, out_file: str = '', fmt: str = 'json') -> str:
     """Дамп метаданных базы в git-дружественный текст (идея D1: GitConverter).

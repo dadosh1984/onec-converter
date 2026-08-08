@@ -216,3 +216,26 @@ append_records(cp, '_REFERENCE3', rows)               # добавить в ко
 - Ограничения: fat_level 1 и пустые таблицы (data_page=0) не поддерживаются;
   индексы и BINARYDATA не пересобираются. Подробнее — `docs/format-8x.md`
   (раздел «Запись»).
+
+## Фаза 11 — новая порция идей (см. `docs/ideas.md`, трек E)
+
+Пересмотр блок-листа идей после фаз 7–10; реализованы три:
+
+| Идея | Модуль | CLI | MCP-тул |
+|---|---|---|---|
+| **E1** Консоль запросов конфигурации (SQL-подобный язык) | `query.py` — `query_table_sql` (SELECT/WHERE/ORDER BY/LIMIT, LIKE; REF → {guid,name}) | `onec-converter query` | `query_sql` |
+| **E2** Сравнение ИБ по GUID (полнота переноса) | `guid_diff.py` — объекты и таблицы по стабильным GUID | `onec-converter guid-diff` | `guid_diff` |
+| **E3** Версии конфигурации (формат/ИБ/платформа + дифф CONFIG↔CONFIGSAVE) | `config_versions.py` | `onec-converter config-versions` | `config_versions` |
+
+Примеры:
+
+```
+onec-converter query --source-dir 1C_8.3 --table PARAMS \
+    --select FILENAME,DATASIZE --where "FILENAME LIKE '%inf%'" --limit 10
+onec-converter guid-diff --source-dir 1C_8.1 --target-dir 1C_8.3
+onec-converter config-versions --source-dir 1C_8.3
+```
+
+Ограничения: история версий хранилища конфигуратора в файле базы отсутствует —
+E3 даёт версии из файла и дифф последнего сохранения (`docs/format-8x.md`,
+раздел «Версии и сохранения»).

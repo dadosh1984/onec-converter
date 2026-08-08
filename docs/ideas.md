@@ -49,7 +49,26 @@
 - **GitConverter целиком** — синхронизация хранилища конфигурации; взята только идея выгрузки метаданных в текст (D1).
 - **liteExchange / FoxyLink** — фреймворки обмена внутри 1С; промежуточный формат у нас уже есть (`intermediate.py`).
 
+
+## Трек E — Фаза 11 (пересмотр блок-листа)
+
+| # | Идея | Источник | Реализация | Статус |
+|---|------|----------|------------|--------|
+| E1 | **Консоль запросов конфигурации** | RequestConsole9000 / consquery (пересмотр C3) | `query.py`: `query_table_sql` — безопасный SQL-подобный язык (SELECT/WHERE/ORDER BY/LIMIT, LIKE; REF → {guid,name}); CLI `query`, MCP `query_sql` | ✅ `query.py` + тул |
+| E2 | **Сравнение ИБ по GUID** | 1CDBStorageStructureInfo (пересмотр C1) | `guid_diff.py`: объекты и таблицы двух баз по стабильным GUID (read_metadata + read_dbnames); CLI `guid-diff`, MCP `guid_diff` | ✅ `guid_diff.py` + тул |
+| E3 | **Версии конфигурации** | 1C-Company/GitConverter (пересмотр D1) | `config_versions.py`: формат/ИБ/платформа + дифф CONFIG↔CONFIGSAVE («что изменилось с последнего сохранения»); CLI `config-versions`, MCP `config_versions` | ✅ `config_versions.py` + тул |
+
+### Пересмотр «Не взято (и почему)» (Фаза 11)
+
+- **История версий конфигурации** (как в хранилище конфигуратора) — в файле
+  базы отсутствует; реализован честный суррогат: версии формата/ИБ/платформы
+  + дифф CONFIG↔CONFIGSAVE (E3).
+- Остальные пункты блок-листа (vanessa-automation, OpenIntegrations, deployka/RAC,
+  bsl-parser, 1C_Sentry, GitConverter, liteExchange/FoxyLink) — причины не брать
+  актуальны (см. выше), новых обстоятельств после фаз 7–10 нет.
+
 ## Итог
+
 
 12 идей + документация — все реализованы в Фазе 6 (✅), 99 тестов зелёные.
 Порядок: A (генератор → кеш → метрики → middleware) → B (приоритет → TOON →

@@ -25,6 +25,7 @@ from .intermediate import (
     save_json_batch,
 )
 from .mapping import MappingError, build_prompt, load_rules
+from .query import QueryError
 from .resolver import RefResolver
 from .transform import TransformError, transform_object
 from .validate import validate_batch
@@ -270,6 +271,55 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---- Фаза 11: query / guid-diff / config-versions ----
+
+def cmd_query(args: argparse.Namespace) -> int:
+    """SQL-подобная выборка записей таблицы 1CD (консоль запросов)."""
+    from .query import query_table_sql
+    from .source_8x_file import Database1CD
+
+    try:
+        cd = Path(args.source_dir) / '1Cv8.1CD'
+        if not cd.is_file():
+            return _err(f'нет 1Cv8.1CD в {args.source_dir}')
+        with Database1CD(cd) as db:
+            rows = query_table_sql(db, args.table, select=args.select,
+                                   where=args.where, order_by=args.order_by,
+                                   limit=args.limit)
+    except QueryError as exc:
+        return _err(str(exc))
+    print(json.dumps({'ok': True, 'table': args.table, 'count': len(rows),
+                      'rows': rows}, ensure_ascii=False, default=str))
+    return 0
+
+
+def cmd_guid_diff(args: argparse.Namespace) -> int:
+    """Сверка двух баз по GUID: объекты и таблицы (полнота переноса)."""
+    from .guid_diff import guid_diff
+    from .source_8x_file import FormatError
+
+    try:
+        report = guid_diff(args.source_dir, args.target_dir)
+    except FormatError as exc:
+        return _err(str(exc))
+    except (OSError, ValueError) as exc:
+        return _err(str(exc))
+    print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
+def cmd_config_versions(args: argparse.Namespace) -> int:
+    """Версии конфигурации: формат, ИБ/платформа, дифф CONFIG↔CONFIGSAVE."""
+    from .config_versions import config_versions
+
+    try:
+        report = config_versions(Path(args.source_dir) / '1Cv8.1CD')
+    except (OSError, ValueError) as exc:
+        return _err(str(exc))
+    print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
 # ---- entry point ----
 
 def build_parser() -> argparse.ArgumentParser:
@@ -314,6 +364,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_status = sub.add_parser('status', help='Состояние пайплайна')
     p_status.add_argument('--project-dir', default='.')
 
+    p_query = sub.add_parser('query', help='SQL-подобная выборка таблицы 1CD (Фаза 11)')
+    p_query.add_argument('--source-dir', required=True)
+    p_query.add_argument('--table', required=True)
+    p_query.add_argument('--select', default='*')
+    p_query.add_argument('--where', default='')
+    p_query.add_argument('--order-by', default='')
+    p_query.add_argument('--limit', type=int, default=100)
+
+    p_guid_diff = sub.add_parser('guid-diff', help='Сверка двух баз по GUID (Фаза 11)')
+    p_guid_diff.add_argument('--source-dir', required=True)
+    p_guid_diff.add_argument('--target-dir', required=True)
+
+    p_config_versions = sub.add_parser('config-versions',
+                                       help='Версии конфигурации из файла базы (Фаза 11)')
+    p_config_versions.add_argument('--source-dir', required=True)
+
     return p
 
 
@@ -326,6 +392,9 @@ def main(argv: list[str] | None = None) -> int:
         'transform': cmd_transform,
         'load': cmd_load,
         'status': cmd_status,
+        'query': cmd_query,
+        'guid-diff': cmd_guid_diff,
+        'config-versions': cmd_config_versions,
     }
     try:
         handler = handlers.get(args.command or '')
