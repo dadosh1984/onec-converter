@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import shutil
 import tempfile
 import zlib
 from dataclasses import dataclass, field
@@ -63,7 +62,7 @@ class Base77:
         return self._reader
 
     @classmethod
-    def from_dt(cls, dt_path: str | Path, workdir: Path | None = None) -> 'Base77':
+    def from_dt(cls, dt_path: str | Path, workdir: Path | None = None) -> Base77:
         """Распаковка 1Cv7.DT (zlib-контейнер) во временный каталог.
 
         Формат .dt 7.7: заголовок + поток zlib с файлами ИБ.
