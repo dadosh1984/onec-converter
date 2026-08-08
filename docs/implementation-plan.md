@@ -7,17 +7,17 @@
 
 ---
 
-## Фаза 22 — Безопасность приёмника (OAuth2 + JWT)
+## Фаза 22 — Безопасность приёмника (OAuth2 + JWT) — ✅ выполнена
 
 Идеи: vladimir-kharin/1c_mcp (OAuth2-прокси), pintov/1c-jwt (HMAC/JWT).
 
-- [ ] [fact] `http_client`: поддержка OAuth2-токена (client-credentials) —
+- [x] [fact] `http_client`: поддержка OAuth2-токена (client-credentials) —
       получение токена + автоматический заголовок; fallback на X-API-Key
-- [ ] [fact] `Module.bsl`: проверка Bearer-токена (JWT: подпись HMAC, срок жизни,
+- [x] [fact] `Module.bsl`: проверка Bearer-токена (JWT: подпись HMAC, срок жизни,
       issuer) — заменяет/дополняет shared-secret
-- [ ] [fact] конфиг: `onec.toml` — `[auth] token_url/client_id/secret` для приёмника
-- [ ] [fact] тесты: получение токена (mock), истёкший/неверный → 401, валидный → 200
-- [ ] [assumption] README/docs: раздел «Аутентификация приёмника (OAuth2/JWT)»
+- [x] [fact] конфиг: `onec.toml` — `[auth] token_url/client_id/secret` для приёмника
+- [x] [fact] тесты: получение токена (mock), истёкший/неверный → 401, валидный → 200
+- [x] [assumption] README/docs: раздел «Аутентификация приёмника (OAuth2/JWT)»
 
 ## Фаза 23 — Conformance-тесты MCP + CI-гейты
 

@@ -104,6 +104,22 @@ onec-converter load --input transformed.json --http http://host/base \
 ```
 HTTP-режим использует `HttpClient83` с ретраями; при ошибках — exit 1 и отчёт.
 
+**Аутентификация приёмника (Фаза 22):** два режима.
+1. **X-API-Key** (простой): `--api-key секрет` — заголовок `X-API-Key`.
+2. **OAuth2 client-credentials** (JWT): `--token-url http://host/token \
+   --client-id id --client-secret секрет` — клиент получает Bearer-токен
+   (кеширует до expires_in, обновляет при 401) и шлёт его в
+   `Authorization: Bearer <jwt>`. Приёмник проверяет подпись HS256
+   (ключ — тот же секрет), срок жизни и issuer. Параметры можно задать
+   в `onec.toml` секцией `[auth]`.
+
+```toml
+[auth]
+token_url = "http://host/token"
+client_id = "migrator"
+client_secret = "..."
+```
+
 ### status — состояние пайплайна
 ```
 onec-converter status --project-dir project/

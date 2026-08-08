@@ -3,6 +3,23 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.5.0 (2026-08)
+
+### Безопасность приёмника — OAuth2 + JWT (Фаза 22)
+- `HttpClient83`: OAuth2 client-credentials — получение Bearer-токена
+  (`token_url`/`client_id`/`client_secret`), кеш до expires_in, авто-обновление
+  при 401; fallback на `X-API-Key` при отсутствии `token_url`.
+- `Module.bsl`: проверка Bearer-JWT (подпись HMAC-SHA256 ключом — тем же
+  секретом, срок жизни `exp`, issuer `ОжидаемыйIssuer`) — чистая 1С, без
+  внешних библиотек; дополняет shared-secret (принимается ключ ИЛИ токен).
+- `jwt_auth.py`: подпись/проверка HS256 на stdlib (эталон для BSL).
+- Конфиг: `onec.toml` секция `[auth]` (`token_url`/`client_id`/`client_secret`)
+  + флаги `load --token-url/--client-id/--client-secret`.
+- Тесты: mint/verify JWT (истёкший/неверная подпись/чужой issuer → отклонён),
+  OAuth2-поток на mock-транспорте (Bearer, кеш, refresh при 401).
+- Документация: README и extension_83/README — раздел «Аутентификация
+  приёмника (OAuth2/JWT)».
+
 ## 0.4.0 (2026-08)
 
 ### Качество и DX (Фаза 31)

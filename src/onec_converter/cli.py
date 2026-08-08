@@ -227,8 +227,14 @@ async def _http_load(objs: list[dict[str, Any]],
     cfg = ProjectConfig.load()
     api_key = args.api_key or cfg._raw.get('api_key', '') or cfg._raw.get('target_api_key', '')
     retries = args.retries or cfg.retries
+    token_url = args.token_url or cfg.token_url
+    client_id = args.client_id or cfg.client_id
+    client_secret = args.client_secret or cfg.client_secret
     client = HttpClient83(args.http, retries=retries,
-                          api_key=api_key or None)
+                          api_key=api_key or None,
+                          token_url=token_url or None,
+                          client_id=client_id or None,
+                          client_secret=client_secret or None)
     try:
         results = await client.load(objs, args.source_ib, args.target_ib)
     finally:
@@ -512,6 +518,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_load.add_argument('--target-ib', default='target')
     p_load.add_argument('--api-key', default='',
                         help='ключ аутентификации приёмника (X-API-Key, Фаза 18)')
+    p_load.add_argument('--token-url', default='',
+                        help='OAuth2 token_url (client-credentials): Bearer-режим (Фаза 22)')
+    p_load.add_argument('--client-id', default='',
+                        help='OAuth2 client_id (при --token-url)')
+    p_load.add_argument('--client-secret', default='',
+                        help='OAuth2 client_secret (при --token-url)')
     p_load.add_argument('--retries', type=int, default=0,
                         help='число повторов HTTP (0 = из конфига/по умолчанию)')
 

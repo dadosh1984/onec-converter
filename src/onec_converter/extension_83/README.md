@@ -25,25 +25,43 @@ HTTP-сервис для записи данных в ИБ-приёмник.
   (поиск по ключу, replace=false не перезаписывает существующие).
 - Коды ответа: 200 (ok), 400 (ошибка контракта), 409 (конфликт ключей/правило 1→1).
 
-## Аутентификация (Фаза 18+)
+## Аутентификация (Фаза 18+, Фаза 22 — OAuth2/JWT)
 
-HTTP-сервис защищён общим секретом:
+HTTP-сервис принимает **любой из двух** способов:
+
+### 1. X-API-Key (shared-secret)
 1. В `Module.bsl` задайте `ОжидаемыйКлюч` (константа в начале модуля) — свой
    надёжный секрет вместо `CHANGE-ME-AND-KEEP-SECRET`.
 2. Клиент (Python) должен отправлять заголовок `X-API-Key` со значением ключа.
-3. Без верного ключа сервер отвечает **401 Unauthorized** (и для GET /metadata,
-   и для POST /load).
+
+### 2. Bearer-JWT (HS256) — рекомендован для продакшена
+Приёмник проверяет токен из заголовка `Authorization: Bearer <jwt>`:
+- **подпись** HMAC-SHA256 — ключом служит `ОжидаемыйКлюч`;
+- **срок жизни** — `exp` не в прошлом;
+- **issuer** — равен `ОжидаемыйIssuer` (по умолчанию `onec-converter`).
+
+Токен выпускается вашим OAuth2-сервером (client-credentials) или формируется
+клиентом по HS256 с тем же секретом. `ПроверитьJWT` реализована в `Module.bsl`
+на чистом 1С (HMAC без внешних библиотек); при любой ошибке — 401.
+
+Без верного ключа/токена сервер отвечает **401 Unauthorized** (и для GET /metadata,
+и для POST /load).
 
 Пример использования из CLI:
 ```bash
 onec-converter load --http http://<server>/loader/hs \
-    --api-key "секрет" \
+    --token-url http://<server>/token \
+    --client-id migrator --client-secret "секрет" \
     --input batch.json
 ```
 Или в `onec.toml`:
 ```toml
+[auth]
+token_url = "http://<server>/token"
+client_id = "migrator"
+client_secret = "секрет"
+
 [onec]
-target_api_key = "секрет"
 retries = 3
 ```
 

@@ -22,6 +22,10 @@ class ProjectConfig:
     target_url: str = ''
     retries: int = 3
     tmp_dir: str = ''
+    # аутентификация приёмника (Фаза 22): OAuth2 client-credentials
+    token_url: str = ''
+    client_id: str = ''
+    client_secret: str = ''
     # прочие ключи сохраняются как есть
     _raw: dict[str, Any] = field(default_factory=dict)
 
@@ -55,6 +59,13 @@ class ProjectConfig:
                         setattr(cfg, attr, val)
                 except ValueError:
                     pass
+        # секция [auth] — OAuth2-параметры приёмника (Фаза 22)
+        auth = parser['auth'] if parser.has_section('auth') else sec
+        for src, attr in [('token_url', 'token_url'),
+                          ('client_id', 'client_id'),
+                          ('client_secret', 'client_secret')]:
+            if src in auth:
+                setattr(cfg, attr, auth[src].strip('"'))
         cfg._raw = {k: sec[k] for k in sec}
         return cfg
 
@@ -62,7 +73,9 @@ class ProjectConfig:
         d: dict[str, Any] = {'source_encoding': self.source_encoding,
                              'limit': self.limit, 'rules_file': self.rules_file,
                              'target_url': self.target_url, 'retries': self.retries,
-                             'tmp_dir': self.tmp_dir}
+                             'tmp_dir': self.tmp_dir,
+                             'token_url': self.token_url, 'client_id': self.client_id,
+                             'client_secret': self.client_secret}
         return d
 
 
