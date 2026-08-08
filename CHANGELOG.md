@@ -3,6 +3,24 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.12.0 (2026-08)
+
+### Мониторинг и интеграции (Фаза 27)
+- `health.py` + MCP-тул `base_health(source_dir)`: версия ИБ, таблицы/строки,
+  lock-файлы (1Cv8.1CL/1Cv8tmp*), свободное место, размер — «здоровье базы»
+  для агента (идея OneS2Zabbix).
+- `s3_client.py`: экспорт отчётов в S3 — `dump-report --file X --s3 bucket`
+  (JSON/XLSX) через авторский минимальный SigV4-клиент (stdlib, без boto3);
+  кастомный `--endpoint` для MinIO/Yandex Object Storage; ключи --key/--secret
+  или env AWS_*.
+- `notify.py`: webhook-хук (HTTP POST JSON) и Telegram (`--notify-url`,
+  `--notify-telegram token:chat_id`) по завершении `load` — best-effort,
+  сбой доставки не меняет результат.
+- README → «Мониторинг и интеграции».
+- Тесты: health на синтетике (+lock-файлы), SigV4 сверен с эталоном
+  botocore, S3-мок (PUT+Authorization), webhook-мок (всего +11).
+- План: Фаза 27 ✅.
+
 ## 0.11.0 (2026-08)
 
 ### Новые коннекторы: техжурнал + релиз конфигурации (Фаза 26)

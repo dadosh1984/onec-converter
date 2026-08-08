@@ -283,6 +283,49 @@ async def _http_load(objs: list[dict[str, Any]],
     return created, updated, errors
 
 
+def cmd_dump_report(args: argparse.Namespace) -> int:
+    """Экспорт отчёта в S3 (Фаза 27): файл JSON/XLSX -> bucket
+    через минимальный SigV4-клиент (--endpoint для S3-совместимых)."""
+    from .s3_client import S3Error, put_object
+
+    f = Path(args.file)
+    if not f.is_file():
+        return _err(f'нет файла отчёта: {args.file}')
+    ct = ('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          if f.suffix.lower() == '.xlsx' else 'application/json')
+    try:
+        rep = put_object(args.s3, f.name, f.read_bytes(),
+                         access_key=args.key, secret_key=args.secret,
+                         endpoint=args.endpoint, region=args.region,
+                         content_type=ct)
+    except S3Error as exc:
+        return _err(str(exc))
+    print(json.dumps(rep, ensure_ascii=False))
+    return 0
+
+
+def _notify(args: argparse.Namespace, payload: dict[str, Any]) -> None:
+    """Отправка уведомления по завершении load (best-effort, Фаза 27)."""
+    from .notify import NotifyError, notify_telegram, send_webhook
+
+    try:
+        if args.notify_telegram:
+            token, _, chat = args.notify_telegram.partition(':')
+            if not chat:
+                raise NotifyError('--notify-telegram ждёт token:chat_id')
+            res = notify_telegram(token, chat, json.dumps(
+                payload, ensure_ascii=False))
+        elif args.notify_url:
+            res = send_webhook(args.notify_url, payload)
+        else:
+            return
+        if not res.get('ok'):
+            print(f'  - уведомление: статус {res.get("status")}',
+                  file=sys.stderr)
+    except NotifyError as exc:
+        print(f'  - {exc}', file=sys.stderr)
+
+
 def cmd_load(args: argparse.Namespace) -> int:
     """Загрузка батчей в приёмник: файл (--target), HTTP (--http) или прямая
     запись в копию 1CD (--direct, Фаза 13 zero-setup)."""
@@ -295,6 +338,9 @@ def cmd_load(args: argparse.Namespace) -> int:
                               snapshot=not args.no_snapshot)
         except LoadError as exc:
             return _err(str(exc))
+        _notify(args, {'ok': True, 'total': rep.get('total', 0),
+                       'tables': rep.get('tables', 0),
+                       'mode': 'direct', 'workdir': str(args.workdir or '')})
         print(json.dumps(rep, ensure_ascii=False, default=str))
         return 0
     if args.http:
@@ -303,6 +349,8 @@ def cmd_load(args: argparse.Namespace) -> int:
             for e in errors[:10]:
                 print(f'  - {e}', file=sys.stderr)
             return _err(f'ошибки загрузки: {len(errors)}')
+        _notify(args, {'ok': True, 'created': created, 'updated': updated,
+                       'mode': 'http'})
         print(json.dumps({'ok': True, 'created': created, 'updated': updated},
                          ensure_ascii=False))
         return 0
@@ -311,6 +359,8 @@ def cmd_load(args: argparse.Namespace) -> int:
         target = target / 'load.json'
     target.parent.mkdir(parents=True, exist_ok=True)
     save_json_batch(objs, target)
+    _notify(args, {'ok': True, 'objects': len(objs),
+                   'mode': 'file', 'file': str(target)})
     print(json.dumps({'ok': True, 'objects': len(objs), 'file': str(target)},
                      ensure_ascii=False))
     return 0
@@ -629,6 +679,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help='каталог приёмника 8.x: запись в копию 1CD (Фаза 13)')
     p_load.add_argument('--workdir', default='',
                         help='каталог для копии приёмника (--direct)')
+    p_load.add_argument('--notify-url', default='',
+                        help='webhook URL по завершении (Фаза 27)')
+    p_load.add_argument('--notify-telegram', default='',
+                        help='token:chat_id Telegram по завершении (Фаза 27)')
     p_load.add_argument('--no-snapshot', action='store_true',
                         help='не сохранять snapshot.1CD приёмника до записи (Фаза 24)')
     p_load.add_argument('--source-ib', default='source')
@@ -716,6 +770,16 @@ def build_parser() -> argparse.ArgumentParser:
                       help='каталог XML-выгрузки (Configuration.xml)')
     p_fc.add_argument('--out', default='', help='запись JSON-файл')
 
+    p_dr = sub.add_parser('dump-report',
+                          help='Экспорт отчёта (JSON/XLSX) в S3 (Фаза 27)')
+    p_dr.add_argument('--file', required=True, help='файл отчёта')
+    p_dr.add_argument('--s3', required=True, help='bucket')
+    p_dr.add_argument('--endpoint', default='',
+                      help='кастомный endpoint (MinIO/Yandex); пусто — AWS')
+    p_dr.add_argument('--key', default='', help='access key (или AWS_* env)')
+    p_dr.add_argument('--secret', default='', help='secret key (или AWS_* env)')
+    p_dr.add_argument('--region', default='us-east-1', help='регион')
+
     return p
 
 
@@ -743,6 +807,7 @@ def main(argv: list[str] | None = None) -> int:
         'audit': cmd_audit,
         'techlog': cmd_techlog,
         'fetch-config': cmd_fetch_config,
+        'dump-report': cmd_dump_report,
     }
     try:
         handler = handlers.get(args.command or '')

@@ -1,0 +1,8 @@
+# Proposal — фазу-27-мониторинг-интеграции
+
+**Goal:** Реализовать Фазу 27 Мониторинг и интеграции в onec-converter: (1) health.py — base_health(source_dir): версия ИБ, таблицы/строки (table_stats), lock-файлы (1Cv8.1CL/1Cv8tmp*), свободное место (disk_usage), размер файла; HealthError; MCP-тул base_health (13-й тул); (2) s3_client.py — авторский минимальный SigV4 (PUT object, stdlib, без boto3): sign_v4 (canonical request + string-to-sign + HMAC-цепочка, сверено с эталоном botocore 5f76a867...), put_object(bucket, key, data, access_key/secret_key, endpoint, region, content_type) с env AWS_*; CLI dump-report --file --s3 --endpoint --key --secret --region; (3) notify.py — send_webhook (HTTP POST JSON, best-effort), telegram_url/notify_telegram; CLI load: --notify-url/--notify-telegram token:chat_id (best-effort, сбой не меняет rc); (4) тесты +11: health на fake-базе + lock-файлы, SigV4 против эталона, S3-мок (PUT+Authorization+payload), webhook-мок, CLI dump-report без ключей, notify; (5) README «Мониторинг и интеграции», CHANGELOG 0.12.0, план Фаза 27 ✅; релиз 0.12.0.
+
+- Platform: тесты в E:\test через gates.sh; версия 0.12.0 (не номер фазы); MCP base_health — 13-й тул
+- Constraints: compact
+- Budget: compact
+- **Lessons applied (v0.12):** фазу-23-conformance-тесты:forge:753265ca3073, фазу-24-полный-сценарий:forge:1b6dbaa2498b, фазу-25-audit-логирование:forge:7c216dc57da7, mcp-python-1-7:forge:5ed7067daeab, mcp-python-1-7:forge:232cb52a8565

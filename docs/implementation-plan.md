@@ -73,13 +73,13 @@
 Идеи: OneS2Zabbix/ClusterMonitoring (здоровье баз), 1c-s3connector (S3),
 Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
 
-- [ ] [fact] MCP-тул `base_health(source_dir)`: число строк/ошибок/блокировки,
+- [ ] [fact] MCP-тул `base_health(source_dir)`: число строк/ошибок/блокировки, ✅
       свободное место, версия ИБ — «здоровье базы» для агента
-- [ ] [fact] экспорт результатов в S3: `dump-report --s3 <bucket>` (xlsx/json)
+- [ ] [fact] экспорт результатов в S3: `dump-report --s3 <bucket>` (xlsx/json) ✅
       через boto3-подобный клиент (авторский, минимальный)
-- [ ] [fact] уведомление по завершении: Telegram-хук (простой HTTP POST) в `load`
-- [ ] [fact] тесты: health на синтетике; S3-мок (запись в tmp); webhook-mock
-- [ ] [assumption] README/docs: раздел «Мониторинг и интеграции»
+- [ ] [fact] уведомление по завершении: Telegram-хук (простой HTTP POST) в `load` ✅
+- [ ] [fact] тесты: health на синтетике; S3-мок (запись в tmp); webhook-mock ✅
+- [ ] [assumption] README/docs: раздел «Мониторинг и интеграции» ✅
 
 ## Фаза 28 — DX: BDD-сценарии, Sonar-отчёт, OpenAPI-спека
 

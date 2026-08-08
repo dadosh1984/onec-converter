@@ -138,6 +138,19 @@ onec-converter clone-db --source-dir 1C_8.1 --target-dir stand/ \
 `load` автоматически сохраняет `workdir/snapshot.1CD` приёмника до записи
 (откат при сбое); отключить: `--no-snapshot`.
 
+### Мониторинг и интеграции (Фаза 27)
+```
+onec-converter base_health --source-dir ./src          # MCP-тул: версия,
+                                                       # строки, блокировки, место
+onec-converter dump-report --file report.xlsx --s3 bucket     --endpoint https://minio.local --key AK --secret SK
+onec-converter load --direct ./tgt --input batch.json --workdir ./work     --notify-url https://hooks.example/1c        # webhook по завершении
+onec-converter load ... --notify-telegram token:chat_id   # Telegram-бот
+```
+`base_health` (MCP) — «здоровье базы»: версия ИБ, число таблиц/строк,
+lock-файлы (1Cv8.1CL/1Cv8tmp*), свободное место. `dump-report` — экспорт
+отчётов в S3 через авторский SigV4-клиент (endpoint — для MinIO/Yandex).
+Уведомления — best-effort: сбой доставки не ломает загрузку.
+
 ### techlog — техжурнал 1С как источник (Фаза 26)
 ```
 onec-converter techlog --source-dir ./logs --process rphost --event EXCP     --level-min 3 --tail 50 --out events.json
