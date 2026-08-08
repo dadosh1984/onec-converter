@@ -28,7 +28,7 @@ class LoadResult:
         return not self.errors
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> 'LoadResult':
+    def from_payload(cls, payload: dict[str, Any]) -> LoadResult:
         return cls(created=int(payload.get('created', 0)),
                    updated=int(payload.get('updated', 0)),
                    errors=list(payload.get('errors', [])))
