@@ -12,6 +12,9 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # нужно право на создание GitHub Release (иначе gh release create даёт 403)
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -59,4 +62,5 @@ jobs:
           gh release create "$VERSION" \
             --title "$VERSION" \
             --notes "См. CHANGELOG.md — публикация по тегу $VERSION." \
-            dist/*.tar.gz dist/*.whl || echo "релиз уже существует"
+            dist/*.tar.gz dist/*.whl \
+            || { echo "не удалось создать GitHub Release"; exit 1; }
