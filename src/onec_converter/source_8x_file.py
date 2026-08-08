@@ -75,9 +75,6 @@ class Version:
     def __str__(self) -> str:
         return f'{self.major}.{self.minor}.{self.build}.{self.revision}'
 
-    def as_tuple(self) -> tuple[int, int, int, int]:
-        return (self.major, self.minor, self.build, self.revision)
-
 
 @dataclass
 class FieldDef:
@@ -614,18 +611,6 @@ class Database1CD:
         return self._dbnames
 
     # ---- конфигурация (CONFIG + CONFIGSAVE) ----
-    def read_config(self) -> dict[str, bytes]:
-        """Все файлы конфигурации, распакованные (медленно на 8.3: 47k файлов).
-
-        Предпочтителен точечный доступ через `config_get()` — он распаковывает
-        только запрошенные файлы (read_metadata использует ~2.5k из 47k).
-        """
-        raw = self._config_raw
-        if raw is None:
-            raw = self._load_config_rows()
-        return {nm: _inflate(self.read_blob(t, off, size))
-                for t, nm, off, size in raw}
-
     def _load_config_rows(self) -> list[tuple[TableDef, str, int, int]]:
         """Строки CONFIG/CONFIGSAVE/PARAMS: (таблица, имя, смещение, размер).
 

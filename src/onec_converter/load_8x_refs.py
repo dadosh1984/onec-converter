@@ -56,7 +56,7 @@ def _nvc_text(row: bytes, fd: Any) -> str:
         return ''
 
 
-def _enc(row: bytearray, fd: Any, value: Any) -> None:
+def _encode_field(row: bytearray, fd: Any, value: Any) -> None:
     """Закодировать значение в поле по типу FieldDef (как object_to_row)."""
     raw: bytes | None = None
     ft = fd.type
@@ -99,5 +99,5 @@ def make_vt_row(vt_table: Any, parent_idref: bytes, line: int,
         row[line_field.offset:line_field.offset + min(len(raw), line_field.size)] = raw
     for fname, fd in vt_table.fields.items():
         if fname in attrs:
-            _enc(row, fd, attrs[fname])
+            _encode_field(row, fd, attrs[fname])
     return bytes(row)

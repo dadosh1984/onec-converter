@@ -21,8 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .fake_1cd import enc_datetime, enc_nc, enc_numeric, enc_nvc
-from .load_8x_refs import ReceiverReferenceIndex, make_vt_row
+from .load_8x_refs import ReceiverReferenceIndex, _encode_field, make_vt_row
 from .source_8x_file import Database1CD, TableDef, read_metadata
 from .write_8x import append_records, copy_1cd
 
@@ -32,26 +31,6 @@ _PREFIX_LEN = 4
 
 class LoadError(Exception):
     """Ошибка прямой загрузки в 1CD."""
-
-
-def _encode_field(row: bytearray, fd: Any, value: Any) -> None:
-    """Кодирование значения в поле строки по типу FieldDef."""
-    raw: bytes | None = None
-    if fd.type == 'NVC':
-        raw = enc_nvc(str(value), fd.length, fd.null_exists)
-    elif fd.type == 'NC':
-        raw = enc_nc(str(value), fd.length)
-    elif fd.type == 'N':
-        raw = enc_numeric(float(value), fd.length, fd.precision)
-    elif fd.type == 'L':
-        raw = b'\x01' if value else b'\x00'
-    elif fd.type == 'DT':
-        raw = enc_datetime(str(value))
-    elif fd.type in ('B', 'RV') and isinstance(value, bytes) and len(value) == 16:
-        raw = value
-    if raw is None:
-        return
-    row[fd.offset:fd.offset + len(raw)] = raw
 
 
 @dataclass(frozen=True)

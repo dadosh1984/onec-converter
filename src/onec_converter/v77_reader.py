@@ -147,9 +147,6 @@ class V77Reader:
     def sections(self) -> list[str]:
         return list(self._sections)
 
-    def section(self, name: str) -> Section | None:
-        return self._sections.get(name)
-
     def unique_ids(self) -> dict[int, int]:
         """id_таблицы -> счётчик записей (из секции Unique IDs)."""
         sec = self._sections.get('Unique IDs')

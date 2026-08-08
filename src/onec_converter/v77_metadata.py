@@ -69,8 +69,3 @@ class V77Metadata:
                     data = b''
                 out.append(ObjectDef(storage=storage, number=number, contents=data))
         return out
-
-    def streams(self, storage: str) -> list[str]:
-        """Имена потоков внутри storage."""
-        prefix = storage + '/'
-        return sorted('/'.join(e) for e in self._ole.listdir() if '/'.join(e).startswith(prefix))

@@ -37,11 +37,6 @@ class VerifyReport:
         return (self.total_source == self.total_target == self.matched
                 and not self.mismatched and not self.missing)
 
-    def as_dict(self) -> dict[str, Any]:
-        return {'full': self.full, 'total_source': self.total_source,
-                'total_target': self.total_target, 'matched': self.matched,
-                'mismatched': self.mismatched[:100], 'missing': self.missing[:100]}
-
 
 def verify(source_objects: Iterable[dict[str, Any]],
            target_objects: Iterable[dict[str, Any]]) -> VerifyReport:
