@@ -107,8 +107,16 @@ Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
 7. **Фаза 28** (BDD/Sonar/OpenAPI) — DX, финализация.
 
 Каждая фаза: think → draft → ручная доводка design/tasks → локальная
-реализация (вариант б) → forge → shield → out → коммит/пуш → архивация.
-Ворота: mypy strict, ruff, pytest, vitest; тесты в `E:\test`.
+реализация (вариант б) → forge → shield → out → коммит/пуш → **релиз** →
+архивация.
+
+**Релиз в конце каждой фазы** (см. RELEASING.md):
+- бамп версии `pyproject.toml` + `cli.py` (0.22.0, 0.23.0, …);
+- публикация в TestPyPI → PyPI → GitHub Release (`bash scripts/release.sh`,
+  или `git tag v<x.y.z> && git push --tags` + `.github/workflows/publish.yml`);
+- обновить `CHANGELOG.md` (что появилось для пользователя).
+
+Ворота: mypy strict, ruff, pytest, vitest; тесты в `E:	est`.
 
 ---
 
