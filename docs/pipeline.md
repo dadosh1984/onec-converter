@@ -16,7 +16,8 @@ intermediate JSON  (save_json_batch, UTF-8)
 target-объекты (type/key/attributes/references)
    │  validate_batch (количество / ссылки / дубликаты)
    ▼
-HttpClient83 → POST /load (батчи ≤500, retry)   ← приёмник 8.3 (расширение)
+загрузка: (а) HTTP /load (батчи ≤500, retry) — приёмник 8.3 (расширение);
+          (б) ПРЯМАЯ запись load_direct (Фаза 13) — копия 1Cv8.1CD приёмника
    ▼
 LoadResult {created, updated, errors} → verify (сверка)
 ```

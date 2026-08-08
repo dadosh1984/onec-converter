@@ -241,3 +241,22 @@ onec-converter config-versions --source-dir 1C_8.3
 Ограничения: история версий хранилища конфигуратора в файле базы отсутствует —
 E3 даёт версии из файла и дифф последнего сохранения (`docs/format-8x.md`,
 раздел «Версии и сохранения»).
+
+## Прямая загрузка в 1CD (Фаза 13, zero-setup A)
+
+Приёмник без HTTP-расширения: объекты (после transform) пишутся напрямую
+в **копию** `1Cv8.1CD` через `load_8x.load_direct` (write_8x, Фазы 10–12).
+Оригинал никогда не изменяется (`copy_1cd` + `LockError` при открытой ИБ).
+
+```bash
+onec-converter load --direct 1C_8.1 --input batch.json --workdir ./out
+```
+
+```python
+from onec_converter.load_8x import load_direct
+rep = load_direct('1C_8.1', objects, workdir='./out')   # {'ok', 'copy_path', ...}
+```
+
+Ограничения MVP: `_IDRREF` новых строк — префикс из существующих строк
+таблицы + счётчик; индексы не пересобираются; простые реквизиты
+(NVC/NC/N/L/DT). Подробнее — `docs/zero-setup.md` и `docs/pipeline.md`.

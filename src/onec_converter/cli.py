@@ -227,8 +227,18 @@ async def _http_load(objs: list[dict[str, Any]],
 
 
 def cmd_load(args: argparse.Namespace) -> int:
-    """Загрузка батчей в приёмник: файл (--target) или HTTP (--http base_url)."""
+    """Загрузка батчей в приёмник: файл (--target), HTTP (--http) или прямая
+    запись в копию 1CD (--direct, Фаза 13 zero-setup)."""
     objs = load_json_batch(args.input)
+    if args.direct:
+        from .load_8x import LoadError, load_direct
+
+        try:
+            rep = load_direct(args.direct, objs, workdir=args.workdir or None)
+        except LoadError as exc:
+            return _err(str(exc))
+        print(json.dumps(rep, ensure_ascii=False, default=str))
+        return 0
     if args.http:
         created, updated, errors = asyncio.run(_http_load(objs, args))
         if errors:
@@ -354,10 +364,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_transform.add_argument('--out', default='')
     p_transform.add_argument('--preview', type=int, default=0)
 
-    p_load = sub.add_parser('load', help='Загрузка в приёмник (файл/HTTP)')
+    p_load = sub.add_parser('load', help='Загрузка в приёмник (файл/HTTP/прямая запись)')
     p_load.add_argument('--input', required=True)
     p_load.add_argument('--target', default='')
     p_load.add_argument('--http', default='')
+    p_load.add_argument('--direct', default='',
+                        help='каталог приёмника 8.x: запись в копию 1CD (Фаза 13)')
+    p_load.add_argument('--workdir', default='',
+                        help='каталог для копии приёмника (--direct)')
     p_load.add_argument('--source-ib', default='source')
     p_load.add_argument('--target-ib', default='target')
 

@@ -580,6 +580,30 @@ def config_versions(source_dir: str) -> str:
     return json.dumps(report, ensure_ascii=False, default=str)
 
 
+@visible_tool('load_direct', 'Прямая загрузка в 1CD без HTTP-расширения: объекты → копия 1Cv8.1CD приёмника (Фаза 13, zero-setup A)')
+def load_direct(target_dir: str, input_file: str, workdir: str = '') -> str:
+    """Прямая запись объектов (батч после transform) в КОПИЮ приёмника.
+
+    Оригинал не изменяется; копия создаётся в workdir (или temp).
+    Возвращает {ok, copy_path, total, tables}. Ограничения MVP —
+    docs/zero-setup.md.
+    """
+    from .intermediate import load_json_batch
+    from .load_8x import LoadError
+    from .load_8x import load_direct as _load_direct
+
+    p = Path(input_file)
+    if not p.is_file():
+        return json.dumps({'ok': False, 'error': f'нет файла батча: {input_file}'},
+                          ensure_ascii=False)
+    objs = load_json_batch(p)
+    try:
+        rep = _load_direct(target_dir, objs, workdir or None)
+    except LoadError as exc:
+        return json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False)
+    return json.dumps(rep, ensure_ascii=False, default=str)
+
+
 @visible_tool('dump_metadata', 'Дамп метаданных базы в git-дружественный текст (идея D1: GitConverter)')
 def dump_metadata(source_dir: str, out_file: str = '', fmt: str = 'json') -> str:
     """Дамп метаданных базы в git-дружественный текст (идея D1: GitConverter).
