@@ -280,12 +280,12 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
       релиз 0.17.0
 ## Фаза 35 — Регистры и перечисления (0.18.0)
 
-- [ ] [fact] writer регистров сведений (_InfoRg) и накопления (_AccumRg)
-- [ ] [fact] enum_mapper: авто-маппинг перечислений по внутренним именам
+- [x] [fact] writer регистров сведений (_InfoRg) и накопления (_AccumRg)
+- [x] [fact] enum_mapper: авто-маппинг перечислений по внутренним именам
       (не только индексам)
-- [ ] [fact] map/transform: секция enums в rules.json; CLI-флаги
-- [ ] [fact] рецепт «перенос остатков» (docs/recipes/)
-- [ ] [assumption] ворота зелёные; релиз 0.18.0
+- [x] [fact] map/transform: секция enums в rules.json; CLI-флаги
+- [x] [fact] рецепт «перенос остатков» (docs/recipes/)
+- [x] [assumption] ворота зелёные; релиз 0.18.0
 
 ## Фаза 36 — SQL-источники (0.19.0)
 
