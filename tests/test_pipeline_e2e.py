@@ -132,7 +132,6 @@ def test_e2e_77_83_cp1251(tmp_path: Path):
 
 def test_http_load_rejects_bad_pair(tmp_path: Path):
     """Контроль: приёмник отклоняет чужую пару (правило 1→1) — 409."""
-    received = _received()
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(409, json={'error': 'pair mismatch'})
