@@ -8,5 +8,5 @@ from __future__ import annotations
 
 
 def test_phase14_docs_tests_import():
-    import tests.test_8x_index_format
+    import tests.test_8x_index_format  # noqa: F401
     import tests.test_8x_index_warning_preserved  # noqa: F401

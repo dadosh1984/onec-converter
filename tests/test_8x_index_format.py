@@ -8,7 +8,6 @@ page0 — каталог границ листьев (uint32), на хвосте
 from __future__ import annotations
 
 import struct
-from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -40,7 +39,7 @@ def test_index_object_is_fat_without_objectsig():
     # struct of uint32 catalog: monotonically non-decreasing, first == 0
     cat = list(struct.unpack('<16I', data[:64]))
     assert cat[0] == 0
-    assert all(l <= r for l, r in pairwise(cat) if r != 0)
+    assert all(l <= r for l, r in zip(cat, cat[1:]) if r != 0)
     assert any(c != 0 for c in cat), 'каталог границ не пуст'
 
 
@@ -55,7 +54,7 @@ def test_index_image_tail_has_payload():
     """
     with Database1CD(BASE_81) as db:
         t = db.tables['_REFERENCE3']
-        _fl, pages, _, data = _read_object_full(BASE_81, t.index_page)
+        fl, pages, _, data = _read_object_full(BASE_81, t.index_page)
     n_pages = len(pages)
     assert n_pages >= 3, 'объект индекса должен содержать >=3 страницы изображений'
     # page0 — каталог границ (не используем как image); берём страницу 2 если есть
