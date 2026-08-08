@@ -113,13 +113,13 @@ def _extract_77(source_dir: str, encoding: str, limit: int,
 
 
 def _extract_8x(source_dir: str, limit: int,
-                specs: list[ObjectSpec]) -> list[dict[str, Any]]:
+                specs: list[ObjectSpec], workers: int = 1) -> list[dict[str, Any]]:
     """8.x: без фильтра — все таблицы (совместимость); с фильтром — только
     таблицы выбранных объектов конфигурации (read_metadata: kind+имя) или
-    физические таблицы через `Таблица.*`."""
+    физические таблицы через `Таблица.*`. При workers>1 — параллельное
+    чтение независимых таблиц (порядок строк сохраняется)."""
     from .source_8x_file import Database1CD, FormatError, read_metadata, read_table
     cd = Path(source_dir) / '1Cv8.1CD'
-    objs: list[dict[str, Any]] = []
     with Database1CD(cd) as db:
         names = sorted(db.tables)
     # маппинг физическая таблица -> (kind, имя) объекта конфигурации
@@ -132,6 +132,8 @@ def _extract_8x(source_dir: str, limit: int,
         except FormatError:
             # база без метаданных (синтетика): только физический фильтр Таблица.*
             pass
+
+    selected: list[str] = []
     for name in names:
         if specs:
             info = meta_by_table.get(name)
@@ -142,16 +144,46 @@ def _extract_8x(source_dir: str, limit: int,
             elif not selects(specs, 'Таблица', name, table=name):
                 # служебная/неконфигурационная таблица — только через Таблица.*
                 continue
+        selected.append(name)
+
+    if not selected:
+        return []
+
+    import threading
+    lock = threading.Lock()
+    counter = 0
+
+    def _rows(name: str) -> list[dict[str, Any]]:
+        nonlocal counter
+        out: list[dict[str, Any]] = []
         for i, rec in enumerate(read_table(cd, name)):
-            objs.append({
+            out.append({
                 OBJ_TYPE: f'Таблица.{name}',
                 OBJ_ID: str(i),
                 OBJ_KEY: [],
                 OBJ_ATTRS: rec,
                 OBJ_REFS: {},
             })
+            with lock:
+                if limit and counter >= limit:
+                    return out
+                counter += 1
+        return out
+
+    if workers > 1 and len(selected) > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            # map сохраняет порядок входных имён -> детерминированный вывод
+            chunks = list(ex.map(_rows, selected))
+        objs = [o for chunk in chunks for o in chunk]
+    else:
+        objs = []
+        for name in selected:
+            objs.extend(_rows(name))
             if limit and len(objs) >= limit:
-                return objs
+                break
+    if limit:
+        return objs[:limit]
     return objs
 
 
@@ -173,7 +205,8 @@ def cmd_extract(args: argparse.Namespace) -> int:
     if ver == '77':
         objs = _extract_77(args.source_dir, encoding, limit, specs)
     else:
-        objs = _extract_8x(args.source_dir, limit, specs)
+        objs = _extract_8x(args.source_dir, limit, specs,
+                            workers=getattr(args, 'workers', 1))
     if args.anonymize_fields:
         from .anonymizer import Anonymizer
         fields = [f.strip() for f in args.anonymize_fields.split(',') if f.strip()]
@@ -388,6 +421,15 @@ def cmd_load(args: argparse.Namespace) -> int:
                               snapshot=not args.no_snapshot)
         except LoadError as exc:
             return _err(str(exc))
+        if args.index_repair:
+            from .index_rebuilder import IndexRepairError, build_repair_script
+            try:
+                ir = build_repair_script(args.direct)
+            except IndexRepairError as exc:
+                print(f'  - {exc}', file=sys.stderr)
+            else:
+                print(f'  - скрипт восстановления индексов: {ir["script"]}'
+                      f' (tool={ir["tool_used"]})', file=sys.stderr)
         _notify(args, {'ok': True, 'total': rep.get('total', 0),
                        'tables': rep.get('tables', 0),
                        'mode': 'direct', 'workdir': str(args.workdir or '')})
@@ -705,6 +747,8 @@ def build_parser() -> argparse.ArgumentParser:
                              'пусто — все данные')
     p_extract.add_argument('--audit-file', default='',
                            help='JSONL-журнал аудита переноса (Фаза 25)')
+    p_extract.add_argument('--workers', type=int, default=1,
+                           help='число потоков чтения (Фаза 34; 1 = последовательно)')
 
     p_map = sub.add_parser('map', help='Правила маппинга (TOON)')
     p_map.add_argument('--rules-file', default='')
@@ -747,6 +791,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help='OAuth2 client_secret (при --token-url)')
     p_load.add_argument('--secret', default='',
                         help='общий секрет для локального mint-token (HS256 JWT, Фаза 33)')
+    p_load.add_argument('--index-repair', action='store_true',
+                        help='сгенерировать скрипт восстановления индексов (--direct, Фаза 34)')
     p_load.add_argument('--retries', type=int, default=0,
                         help='число повторов HTTP (0 = из конфига/по умолчанию)')
     p_load.add_argument('--audit-file', default='',

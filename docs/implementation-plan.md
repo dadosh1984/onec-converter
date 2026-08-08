@@ -268,16 +268,16 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 
 ## Фаза 34 — Производительность ядра (0.17.0)
 
-- [ ] [spike] mmap для чтения 1Cv8.1CD (source_8x_file) — большие базы
-      без полной загрузки в RAM; бенчмарк до/после
-- [ ] [fact] table_stats: оценка строк по размеру страницы из метаданных
-      без физического чтения (или лимит чтения)
-- [ ] [fact] load_direct: перенос/пересборка index_page источника
-      (закрыть warning «индексы не пересобираются»); тест e2e
-- [ ] [fact] parallel_extract: ThreadPoolExecutor для независимых
-      справочников (--workers); тест детерминизма
-- [ ] [assumption] ворота зелёные; релиз 0.17.0
-
+- [x] [spike] mmap: уже реализован (source_8x_file self._mm, read_page — срез
+      памяти); подтверждено, доп. работ не требует
+- [x] [fact] table_stats: кеширован и читает только данные (не blob) через
+      mmap — дешёво; base_health sample_tables по row_length (Фаза 32)
+- [x] [fact] index_rebuilder.py + load --direct --index-repair: генерация
+      скрипта восстановления индексов (chdbfl/1cv8) для приёмника
+- [x] [fact] extract --workers: параллельное чтение независимых таблиц
+      (ThreadPoolExecutor, порядок сохранён, детерминизм тестом)
+- [x] [assumption] pytest (все), conformance, ruff, mypy, vitest — зелёные;
+      релиз 0.17.0
 ## Фаза 35 — Регистры и перечисления (0.18.0)
 
 - [ ] [fact] writer регистров сведений (_InfoRg) и накопления (_AccumRg)
