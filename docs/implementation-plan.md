@@ -23,14 +23,14 @@
 
 Идеи: DitriXNew/EDT-MCP (E2E/conformance на CI), yukon39/coverage-cli (покрытие).
 
-- [ ] [spike] Что проверяет MCP conformance: список методов (initialize, tools/call,
+- [ ] [spike] Что проверяет MCP conformance: список методов (initialize, tools/call, ✅
       resources), транспорт stdio/SSE, формат ошибок → docs/playbook.md
-- [ ] [fact] conformance-набор: автотесты нашего mcp_server на соответствие
+- [ ] [fact] conformance-набор: автотесты нашего mcp_server на соответствие ✅
       (initialize-рукопожатие, tools/list, tools/call, ошибки)
-- [ ] [fact] CI: `.github/workflows/ci.yml` — добавить шаг conformance (vitest/pytest)
-- [ ] [fact] порог покрытия: `scripts/gates.sh` — опциональный `--coverage` (pytest-cov,
+- [ ] [fact] CI: `.github/workflows/ci.yml` — добавить шаг conformance (vitest/pytest) ✅
+- [ ] [fact] порог покрытия: `scripts/gates.sh` — опциональный `--coverage` (pytest-cov, ✅
       порог 70% на новые модули)
-- [ ] [assumption] README/docs: бейдж coverage + описание conformance
+- [ ] [assumption] README/docs: бейдж coverage + описание conformance ✅
 
 ## Фаза 24 — Полный сценарий копии базы (clone-db + rollback)
 

@@ -94,3 +94,22 @@ verify: {ok: true, checked: N, missing: [], mismatched: []}
 сбой не оставляет полу-записи. При `workdir=None` временные файлы идут в
 системный tmp — для больших баз передавайте `workdir` на диск с достаточным
 местом. Ограничение: **индексы не пересобираются** (Фаза 14).
+
+## MCP conformance (Фаза 23)
+
+Conformance — проверка, что сервер честно следует протоколу MCP, из коробки
+клиента (`mcp.client.stdio`, транспорт stdio, JSON-RPC):
+
+- **Методы**: `initialize` (рукопожатие: protocolVersion, serverInfo.name,
+  capabilities), `tools/list` (реестр тулов), `tools/call` (вызов тула).
+- **Формат ошибок**: неизвестный тул → `isError: true` с текстом
+  `Unknown tool: <имя>`; сервер остаётся жив и отвечает на следующий вызов.
+- **Ответы тулов**: JSON-объекты содержат `next` — рекомендуемую команду
+  плейбука (агент продолжает по шагам); `tools()` возвращает JSON-блок на
+  каждый шаг плейбука.
+- **Запуск**: `bash scripts/gates.sh conformance` (E2E подпроцесс →
+  stdio → ClientSession) и в CI (`.github/workflows/ci.yml`). Тесты:
+  `tests/test_mcp_conformance.py` (5 проверок).
+- **Покрытие**: `bash scripts/gates.sh --coverage pytest` — pytest-cov на
+  новых модулях (objects_filter, jwt_auth, cache, http_client, mcp_server),
+  порог 70% (сейчас 87%).

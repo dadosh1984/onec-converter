@@ -201,11 +201,13 @@ HTTP-сервисы `GET /metadata` и `POST /load`. Целевая фича «z
 
 ## Тесты
 ```
-# Все ворота одним скриптом (pytest + ruff + mypy + vitest):
+# Все ворота одним скриптом (pytest + MCP conformance + ruff + mypy + vitest):
 bash scripts/gates.sh
 
 # Опционально: вручную
 pytest                      # unit + интеграционные (реальные базы — read-only копии)
+bash scripts/gates.sh conformance   # E2E conformance MCP-сервера (Фаза 23)
+bash scripts/gates.sh --coverage pytest  # + порог покрытия 70% на новых модулях
 ruff check src tests
 mypy src
 npx vitest run              # .ts-сниппеты для Orion shield

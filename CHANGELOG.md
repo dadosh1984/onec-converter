@@ -3,6 +3,21 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.8.0 (2026-08)
+
+### Conformance-тесты MCP + CI-гейты (Фаза 23)
+- `tests/test_mcp_conformance.py` (5 проверок): initialize-рукопожатие,
+  tools/list (реестр без дублей 29.1), tools/call, изолированная ошибка
+  неизвестного тула (сервер жив), поле `next` в ответах. E2E через
+  stdio-транспорт из коробки клиента mcp 1.x.
+- `scripts/gates.sh conformance` — отдельная цель ворот + шаг в CI
+  (.github/workflows/ci.yml).
+- `scripts/gates.sh --coverage pytest` — pytest-cov на новых модулях
+  (objects_filter, jwt_auth, cache, http_client, mcp_server), порог 70%
+  (сейчас 87%).
+- docs/playbook.md → «MCP conformance»; README — conformance/coverage.
+- План: Фаза 23 ✅.
+
 ## 0.7.0 (2026-08)
 
 ### Сокращение MCP-туллов (Фаза 29.1)

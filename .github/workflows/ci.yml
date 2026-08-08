@@ -31,6 +31,9 @@ jobs:
       - name: pytest (unit)
         run: bash scripts/gates.sh pytest
 
+      - name: pytest (MCP conformance, E2E stdio)
+        run: bash scripts/gates.sh conformance
+
       - name: check_bsl (static, расширение 1С)
         run: python scripts/check_bsl.py
 

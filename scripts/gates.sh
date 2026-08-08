@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Ворота проекта onec-converter: pytest, ruff, mypy, vitest.
+# Ворота проекта onec-converter: pytest, ruff, mypy, vitest, MCP-conformance.
 # Использование:
 #   bash scripts/gates.sh                 # все ворота
 #   bash scripts/gates.sh pytest          # только одну проверку
+#   bash scripts/gates.sh conformance     # E2E conformance MCP-сервера (Фаза 23)
 #   bash scripts/gates.sh --strict-steps  # все ворота, skip-шаги роняют (для CI)
+#   bash scripts/gates.sh --coverage pytest  # pytest + порог покрытия 70%
+#       (pytest-cov на модулях Фаз 29-31: objects_filter, jwt_auth, cache,
+#        http_client, mcp_server — новые модули; см. Фазу 23)
 #
 # Временные файлы (копии реальных .1CD, сотни МБ) кладутся в базовый tmp.
 # По умолчанию /tmp; для больших баз задайте ONEC_TEST_TMP на диск с местом:
@@ -25,10 +29,12 @@ if [[ -n "${ONEC_TEST_TMP:-}" ]]; then
   export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} --basetemp=${ONEC_TEST_TMP}"
 fi
 STRICT_STEPS=0
+COVERAGE=0
 ARGS=()
 for a in "$@"; do
   case "$a" in
     --strict-steps) STRICT_STEPS=1 ;;
+    --coverage) COVERAGE=1 ;;
     *) ARGS+=("$a") ;;
   esac
 done
@@ -47,9 +53,24 @@ skip_or_fail() {
   return 0
 }
 
+# Модули Фаз 29-31 (новые) — порог покрытия 70% (Фаза 23).
+COVERAGE_MODULES=(objects_filter jwt_auth cache http_client mcp_server)
+COV_ARGS=()
+if [[ "$COVERAGE" == "1" ]]; then
+  for m in "${COVERAGE_MODULES[@]}"; do
+    COV_ARGS+=(--cov=onec_converter.$m)
+  done
+  COV_ARGS+=(--cov-report=term --cov-fail-under=70)
+fi
+
 run_pytest() {
-  echo "== pytest =="
-  PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} --basetemp=${ONEC_TEST_TMP}" python -m pytest -q
+  echo "== pytest ${COV_ARGS[*]:+(${COV_ARGS[*]})} =="
+  PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} --basetemp=${ONEC_TEST_TMP}" python -m pytest -q "${COV_ARGS[@]}"
+}
+run_conformance() {
+  echo "== MCP conformance =="
+  PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} --basetemp=${ONEC_TEST_TMP}" \
+    python -m pytest tests/test_mcp_conformance.py -q
 }
 run_ruff() {
   echo "== ruff =="
@@ -75,6 +96,7 @@ case "$TARGET" in
   ruff)   run_ruff ;;
   mypy)   run_mypy ;;
   vitest) run_vitest ;;
-  all)    run_pytest && run_ruff && run_mypy && run_vitest ;;
-  *) echo "неизвестная цель: $TARGET (pytest|ruff|mypy|vitest|all|--strict-steps)" >&2; exit 2 ;;
+  conformance) run_conformance ;;
+  all)    run_pytest && run_conformance && run_ruff && run_mypy && run_vitest ;;
+  *) echo "неизвестная цель: $TARGET (pytest|ruff|mypy|vitest|conformance|all|--strict-steps|--coverage)" >&2; exit 2 ;;
 esac
