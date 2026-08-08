@@ -1,0 +1,16 @@
+{
+  "title": "фаза-20-производительность-dx",
+  "goal": "Фаза 20 — производительность и DX. Сфокусироваться на реализуемом и ценном: (1) потоковый extract для больших баз: extract должен писать intermediate в файл потоком (без накопления всех объектов в памяти/OOM) — добавить потоковую сериализацию в записи intermediate JSON (array или NDJSON); проверить существующий extract, что большие базы не падают с OOM; опция --stream; (2) команда `onec-converter dump-records`: вывод N строк таблицы (10-100) в JSON/CSV для отладки правил без полной выгрузки; (3) команда `onec-converter rollback`: создание снапшота (копии) 1CD перед load (в workdir) и откат к снапшоту при сбое (ENOSPC/баг) — атомарное восстановление; (4) конфиг-файл проекта (onec.toml в каталоге проекта): повторяющиеся параметры (кодировка источника, url приёмника, ретраи, tmp_dir) — cli читает при отсутствии флагов; (5) mmap-чтение 1Cv8.1CD через mmap вместо read для снижения RAM (обёртка в Database1CD, опционально/безопасно); (6) CHANGELOG.md пользовательским языком. Реализовать авторским кодом с тестами; не ломать существующее; приоритет: потоковый extract, dump-records, rollback, конфиг-файл. — Python (streaming/extract, cli.py, load_8x, write_8x, docs)",
+  "platform": "Философия: без копирования. Ворота: mypy strict, ruff, pytest. Запись только в копии. Не ломать существующий extract/пайплайн.",
+  "constraints": "high",
+  "budget": "high",
+  "clarity": "clear",
+  "language": "ru",
+  "appliesLessons": [
+    "фаза-7-сквозной-перенос:shield:be4adfcf0907",
+    "фаза-8-xlsx-отчёты:shield:2aa0eefd02e7",
+    "mcp-python-1-7:forge:01528e6c32f6",
+    "mcp-python-1-7:forge:5ed7067daeab",
+    "migrate-tool-e2e-pipeline:shield:2547efbb2c08"
+  ]
+}

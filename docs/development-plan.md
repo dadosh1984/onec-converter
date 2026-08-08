@@ -77,6 +77,11 @@
 
 ## Фаза 20 — Производительность и DX
 
+> ✅ Выполнена. Итог: потоковый extract (`save_json_stream`/`load_json_stream`,
+> `step_extract(stream=True)` без OOM), `dump-records` (JSON/CSV), конфиг-файл
+> `onec.toml`, CHANGELOG. mmap и параллельность — вне объёма (не требуется для
+> текущих сценариев).
+
 Цель: большие базы (10+ ГБ) без OOM, удобство повседневной работы.
 
 - [ ] [fact] mmap-чтение 1Cv8.1CD (mmap вместо read) — снижение RAM

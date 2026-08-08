@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -59,3 +60,46 @@ def save_json_batch(objects: list[dict[str, Any]], path: str | Path) -> None:
 def load_json_batch(path: str | Path) -> list[dict[str, Any]]:
     data: list[dict[str, Any]] = json.loads(Path(path).read_text(encoding='utf-8'))
     return data
+
+
+def save_json_stream(objects: Iterable[dict[str, Any]], path: str | Path,
+                     batch_size: int = 10000) -> None:
+    """Потоковая запись промежуточного JSON (по одному объекту на строку).
+
+    Не накапливает все объекты в памяти — подходит для больших баз без OOM.
+    Формат: '[{{...}},\n{{...}}]' — валидный JSON-массив (совместим с
+    load_json_batch).
+    """
+    p = Path(path)
+    with p.open('w', encoding='utf-8') as f:
+        f.write('[')
+        first = True
+        for obj in objects:
+            if not first:
+                f.write(',\n')
+            f.write(json.dumps(obj, ensure_ascii=False))
+            first = False
+        f.write(']')
+
+
+def load_json_stream(path: str | Path) -> Iterable[dict[str, Any]]:
+    """Потоковое чтение JSON-массива: генератор объектов (без OOM).
+
+    Формат '[\n{...},\n{...}]' — по одному объекту на строку (NDJSON).
+    Учитывается, что '[' может идти на одной строке с первым объектом,
+    а ']' — на одной с последним.
+    """
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            s = line.strip()
+            if s.startswith('['):
+                s = s[1:].lstrip()
+            if s in ('[', ']', '[,', '[]'):
+                continue
+            s = s.removesuffix(',').rstrip()
+            if s.endswith(']'):
+                s = s[:-1].rstrip()
+            s = s.removesuffix(',').rstrip()
+            if not s:
+                continue
+            yield json.loads(s)

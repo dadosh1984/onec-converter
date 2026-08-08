@@ -182,23 +182,36 @@ class PipelineState:
         self._mark('inspect_source')
         return {'ok': True, 'cached': False, 'metadata': meta}
 
-    def step_extract(self, out_file: str) -> dict[str, Any]:
+    def step_extract(self, out_file: str, stream: bool = False) -> dict[str, Any]:
         if self.source is None:
             raise ValueError('вызовите init')
         reader = self.source.data
-        objs: list[dict[str, Any]] = []
-        for table_id, recs in reader.references().items():
-            for rec in recs:
-                if not rec:
-                    continue
-                objs.append({
-                    OBJ_TYPE: f'Справочник.{table_id}',
-                    'id': str(rec[0]),
-                    'key': [str(v) for v in rec[1:3]],
-                    'attributes': {'_code': rec[1] if len(rec) > 1 else None,
-                                   '_descr': rec[2] if len(rec) > 2 else None},
-                    'references': {},
-                })
+        from collections.abc import Iterable as _Iter
+
+        from .intermediate import save_json_stream
+
+        def _gen() -> _Iter[dict[str, Any]]:
+            for table_id, recs in reader.references().items():
+                for rec in recs:
+                    if not rec:
+                        continue
+                    yield {
+                        OBJ_TYPE: f'Справочник.{table_id}',
+                        'id': str(rec[0]),
+                        'key': [str(v) for v in rec[1:3]],
+                        'attributes': {'_code': rec[1] if len(rec) > 1 else None,
+                                       '_descr': rec[2] if len(rec) > 2 else None},
+                        'references': {},
+                    }
+
+        if stream:
+            # потоковая запись без накопления всех объектов в памяти (Фаза 20)
+            save_json_stream(_gen(), out_file)
+            self.extracted = []  # для больших баз не держим в памяти
+            self._mark('extract')
+            return {'ok': True, 'objects': 'stream',
+                    'file': out_file, 'stream': True}
+        objs = list(_gen())
         self.extracted = objs
         self._mark('extract')
         save_json_batch(objs, out_file)

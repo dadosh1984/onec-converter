@@ -1,0 +1,76 @@
+"""Конфигурация проекта (Фаза 20): читает onec.toml в каталоге проекта/текущей папке.
+
+Повторяющиеся параметры CLI (кодировка источника, лимиты, tmp-каталог)
+могут задаваться в файле, чтобы не повторять длинные флаги.
+"""
+
+from __future__ import annotations
+
+import configparser
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+
+@dataclass
+class ProjectConfig:
+    """Значения по умолчанию из конфиг-файла (onec.toml)."""
+
+    source_encoding: str = 'cp866'
+    limit: int = 0
+    rules_file: str = ''
+    target_url: str = ''
+    retries: int = 3
+    tmp_dir: str = ''
+    # прочие ключи сохраняются как есть
+    _raw: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def load(cls, path: str | Path | None = None) -> ProjectConfig:
+        cfg = cls()
+        p = Path(path) if path else _find_config()
+        if p is None or not p.is_file():
+            return cfg
+        parser = configparser.ConfigParser()
+        # onec.toml может быть без секций (упрощённый INI) или с [onec]
+        try:
+            parser.read(p, encoding='utf-8')
+        except (configparser.Error, OSError, UnicodeDecodeError):
+            return cfg
+        sec = parser['onec'] if parser.has_section('onec') else parser.defaults()
+        for src, attr in [
+            ('source_encoding', 'source_encoding'),
+            ('limit', 'limit'),
+            ('rules_file', 'rules_file'),
+            ('target_url', 'target_url'),
+            ('retries', 'retries'),
+            ('tmp_dir', 'tmp_dir'),
+        ]:
+            if src in sec:
+                val = sec[src].strip('"')
+                try:
+                    if attr in ('limit', 'retries'):
+                        setattr(cfg, attr, int(val))
+                    else:
+                        setattr(cfg, attr, val)
+                except ValueError:
+                    pass
+        cfg._raw = {k: sec[k] for k in sec}
+        return cfg
+
+    def as_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {'source_encoding': self.source_encoding,
+                             'limit': self.limit, 'rules_file': self.rules_file,
+                             'target_url': self.target_url, 'retries': self.retries,
+                             'tmp_dir': self.tmp_dir}
+        return d
+
+
+def _find_config() -> Path | None:
+    """Поиск onec.toml: текущая папка и выше до корня."""
+    cur = Path.cwd()
+    for d in [cur, *cur.parents]:
+        p = d / 'onec.toml'
+        if p.is_file():
+            return p
+    return None

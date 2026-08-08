@@ -131,12 +131,19 @@ def _extract_8x(source_dir: str, limit: int, only: list[str]) -> list[dict[str, 
 
 def cmd_extract(args: argparse.Namespace) -> int:
     """Чтение 7.7/8.x -> intermediate JSON (--encoding, --anonymize-fields, --limit, --objects)."""
+    # конфиг-файл (onec.toml) как источник дефолтов (Фаза 20)
+    from .config import ProjectConfig
+    cfg = ProjectConfig.load()
+    encoding = args.source_encoding
+    if args.source_encoding in ('cp866', '') and cfg.source_encoding:
+        encoding = cfg.source_encoding
+    limit = args.limit or cfg.limit
     only = [o.strip() for o in args.objects.split(',')] if args.objects else []
     ver = _detect_version(args.source_dir)
     if ver == '77':
-        objs = _extract_77(args.source_dir, args.source_encoding, args.limit, only)
+        objs = _extract_77(args.source_dir, encoding, limit, only)
     else:
-        objs = _extract_8x(args.source_dir, args.limit, only)
+        objs = _extract_8x(args.source_dir, limit, only)
     if args.anonymize_fields:
         from .anonymizer import Anonymizer
         fields = [f.strip() for f in args.anonymize_fields.split(',') if f.strip()]
@@ -401,6 +408,47 @@ def cmd_cache(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dump_records(args: argparse.Namespace) -> int:
+    """Вывод первых N строк таблицы 1CD в JSON/CSV (Фаза 20, для отладки правил)."""
+    from .source_8x_file import Database1CD, decode_field
+
+    cd = Path(args.source_dir) / '1Cv8.1CD'
+    if not cd.is_file():
+        return _err(f'нет 1Cv8.1CD в {args.source_dir}')
+    limit = args.limit
+    with Database1CD(cd) as db:
+        t = db.tables.get(args.table)
+        if t is None:
+            return _err(f'нет таблицы {args.table!r}')
+        rows: list[dict[str, Any]] = []
+        for i, row in enumerate(db.table_rows(t)):
+            if i >= limit:
+                break
+            rec: dict[str, Any] = {}
+            for fname, fdef in t.fields.items():
+                try:
+                    rec[fname] = _jsonable(decode_field(fdef, row[fdef.offset:fdef.offset + fdef.size]))
+                except (IndexError, ValueError, UnicodeDecodeError):
+                    rec[fname] = None
+            rows.append(rec)
+    if args.format == 'csv':
+        import csv
+        import io
+        out = io.StringIO()
+        if rows:
+            w = csv.DictWriter(out, fieldnames=list(rows[0].keys()))
+            w.writeheader()
+            w.writerows(rows)
+        print(out.getvalue().rstrip())
+    else:
+        print(json.dumps(rows, ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
+def _jsonable(v: Any) -> Any:
+    return str(v) if v is not None and not isinstance(v, (int, float, bool, str)) else v
+
+
 # ---- entry point ----
 
 def build_parser() -> argparse.ArgumentParser:
@@ -472,6 +520,13 @@ def build_parser() -> argparse.ArgumentParser:
                          choices=['stats', 'clear'])
     p_cache.add_argument('--root-dir', default='', help='Каталог кеша')
 
+    p_dump = sub.add_parser('dump-records',
+                            help='Первый N строк таблицы 1CD в JSON/CSV (Фаза 20)')
+    p_dump.add_argument('--source-dir', required=True)
+    p_dump.add_argument('--table', required=True)
+    p_dump.add_argument('--limit', type=int, default=20)
+    p_dump.add_argument('--format', choices=['json', 'csv'], default='json')
+
     return p
 
 
@@ -489,6 +544,7 @@ def main(argv: list[str] | None = None) -> int:
         'config-versions': cmd_config_versions,
         'doctor': cmd_doctor,
         'cache': cmd_cache,
+        'dump-records': cmd_dump_records,
     }
     try:
         handler = handlers.get(args.command or '')
