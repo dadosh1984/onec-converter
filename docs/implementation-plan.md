@@ -125,6 +125,12 @@ Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
       нет «мёртвых» команд/тулов, аргументы согласованы (одни и те же флаги
       --source-dir/--out и т.д.), next-цепочки корректны (см. playbook)
 - [ ] [fact] Устранение рассинхронов (если найдены): документировать/чинить
+- [ ] [fact] Сокращение MCP-туллов (устранить дубли через --format):
+      объединить `query_table`→`query_sql` (удалить старый), 
+      `table_sizes`/`table_sizes_report`→`table_sizes --format json|xlsx`,
+      `structure_report`/`compare_structures`→`compare_structures --format json|xlsx`
+      (сократить 15 тулов до ~11, проще агенту; CLI-поверхность не трогаем)
+
       (например, `tools()` MCP vs реальные туллы — как `preview`/`verify`)
 
 ### 29.2. Внедрение навыков (идей) в команды
