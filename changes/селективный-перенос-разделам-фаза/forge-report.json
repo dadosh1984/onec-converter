@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "done": 5,
+  "total": 5,
+  "skipped": 0,
+  "pending": [],
+  "missingSnippets": [],
+  "reportPath": "changes/селективный-перенос-разделам-фаза/forge-report.md",
+  "message": "forge complete: 5 done, 0 skipped from cache"
+}

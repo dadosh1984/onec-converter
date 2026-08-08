@@ -1,0 +1,16 @@
+{
+  "title": "селективный-перенос-разделам-фаза",
+  "goal": "Реализовать селективный перенос по разделам (Фаза 29.2, требование пользователя) в onec-converter: extract --objects \"Справочник.Номенклатура,Документ.БанковскиеВыписки\" — фильтр по конфигурационным объектам (kind+имя из read_metadata), поддержка групп Справочник.*/Документ.*/Регистр.*, физические таблицы Таблица._REFERENCE3; без --objects — перенос всех данных (по умолчанию, совместимость). MCP step_extract — параметр objects. Новый модуль objects_filter.py (парсер+матчер), тесты (unit + CLI 8x на fake-базе + 7.7). Доки README/CHANGELOG. Ворота зелёные, релиз 0.6.0.",
+  "platform": "",
+  "constraints": "compact",
+  "budget": "compact",
+  "clarity": "vague",
+  "language": "ru",
+  "appliesLessons": [
+    "фаза-11-новая-порция:forge:409e2a92d172",
+    "фаза-11-новая-порция:forge:537c39f668a9",
+    "mcp-python-1-7:forge:127c0dfb1a04",
+    "mcp-python-1-7:forge:8518cd4a492d",
+    "mcp-python-1-7:forge:5ed7067daeab"
+  ]
+}

@@ -26,6 +26,7 @@ from .intermediate import (
     save_json_batch,
 )
 from .mapping import MappingError, build_prompt, load_rules
+from .objects_filter import ObjectSpec, parse_objects, selects
 from .query import QueryError
 from .resolver import RefResolver
 from .transform import TransformError, transform_object
@@ -84,13 +85,13 @@ def cmd_inspect(args: argparse.Namespace) -> int:
 # ---- extract ----
 
 def _extract_77(source_dir: str, encoding: str, limit: int,
-                only: list[str]) -> list[dict[str, Any]]:
+                specs: list[ObjectSpec]) -> list[dict[str, Any]]:
     from .base_reader import Base77
     reader = Base77(Path(source_dir), encoding=encoding).data
     objs: list[dict[str, Any]] = []
     for table_id, recs in reader.references().items():
         obj_type = f'Справочник.{table_id}'
-        if only and not any(o in obj_type for o in only):
+        if specs and not selects(specs, 'Справочник', str(table_id)):
             continue
         for rec in recs:
             if not rec:
@@ -108,15 +109,36 @@ def _extract_77(source_dir: str, encoding: str, limit: int,
     return objs
 
 
-def _extract_8x(source_dir: str, limit: int, only: list[str]) -> list[dict[str, Any]]:
-    from .source_8x_file import Database1CD, read_table
+def _extract_8x(source_dir: str, limit: int,
+                specs: list[ObjectSpec]) -> list[dict[str, Any]]:
+    """8.x: без фильтра — все таблицы (совместимость); с фильтром — только
+    таблицы выбранных объектов конфигурации (read_metadata: kind+имя) или
+    физические таблицы через `Таблица.*`."""
+    from .source_8x_file import Database1CD, FormatError, read_metadata, read_table
     cd = Path(source_dir) / '1Cv8.1CD'
     objs: list[dict[str, Any]] = []
     with Database1CD(cd) as db:
         names = sorted(db.tables)
+    # маппинг физическая таблица -> (kind, имя) объекта конфигурации
+    meta_by_table: dict[str, tuple[str, str]] = {}
+    if specs:
+        try:
+            for o in read_metadata(cd)['objects']:
+                if o.get('table'):
+                    meta_by_table[o['table']] = (o['kind'], o['name'])
+        except FormatError:
+            # база без метаданных (синтетика): только физический фильтр Таблица.*
+            pass
     for name in names:
-        if only and not any(o.lower() in name.lower() for o in only):
-            continue
+        if specs:
+            info = meta_by_table.get(name)
+            if info:
+                kind, obj_name = info
+                if not selects(specs, kind, obj_name, table=name):
+                    continue
+            elif not selects(specs, 'Таблица', name, table=name):
+                # служебная/неконфигурационная таблица — только через Таблица.*
+                continue
         for i, rec in enumerate(read_table(cd, name)):
             objs.append({
                 OBJ_TYPE: f'Таблица.{name}',
@@ -139,12 +161,16 @@ def cmd_extract(args: argparse.Namespace) -> int:
     if args.source_encoding in ('cp866', '') and cfg.source_encoding:
         encoding = cfg.source_encoding
     limit = args.limit or cfg.limit
-    only = [o.strip() for o in args.objects.split(',')] if args.objects else []
+    try:
+        specs = parse_objects(
+            [o.strip() for o in args.objects.split(',')]) if args.objects else []
+    except ValueError as exc:
+        raise CLIError(str(exc)) from exc
     ver = _detect_version(args.source_dir)
     if ver == '77':
-        objs = _extract_77(args.source_dir, encoding, limit, only)
+        objs = _extract_77(args.source_dir, encoding, limit, specs)
     else:
-        objs = _extract_8x(args.source_dir, limit, only)
+        objs = _extract_8x(args.source_dir, limit, specs)
     if args.anonymize_fields:
         from .anonymizer import Anonymizer
         fields = [f.strip() for f in args.anonymize_fields.split(',') if f.strip()]
@@ -491,7 +517,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_extract.add_argument('--out', required=True)
     p_extract.add_argument('--anonymize-fields', default='')
     p_extract.add_argument('--limit', type=int, default=0)
-    p_extract.add_argument('--objects', default='')
+    p_extract.add_argument('--objects', default='',
+                        help='селективный перенос (Фаза 29.2): CSV "Раздел.Имя" '
+                             'или группы "Раздел.*" (Справочник.*/Документ.*/'
+                             'Регистр.*), физические таблицы "Таблица._REFERENCE3"; '
+                             'пусто — все данные')
 
     p_map = sub.add_parser('map', help='Правила маппинга (TOON)')
     p_map.add_argument('--rules-file', default='')

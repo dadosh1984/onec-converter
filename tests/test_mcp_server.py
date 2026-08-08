@@ -26,8 +26,7 @@ def test_full_pipeline(tmp_path: Path):
     ins = st.step_inspect_source()
     assert ins['ok'] and ins['metadata']['references_tables'] == 1
     ext = st.step_extract(str(tmp_path / 'out.json'))
-    assert ext['objects'] == 2
-    # повторный inspect — из кеша
+    assert ext['objects'] == 2    # повторный inspect — из кеша
     ins2 = st.step_inspect_source()
     assert ins2['cached'] is True
     rules = {'version': 1, 'objects': [
@@ -37,6 +36,21 @@ def test_full_pipeline(tmp_path: Path):
     assert m['ok']
     pv = st.step_prevalidate()
     assert pv['ok'] and pv['counts']['Справочник.1'] == 2
+
+
+def test_step_extract_objects_filter(tmp_path: Path):
+    base = _make_state(tmp_path)
+    st = PipelineState(tmp_path / 'proj')
+    st.step_init(str(tmp_path / 'proj'), 'srcA', 'tgtX', str(base))
+    # группа Справочник.* — всё
+    ext_all = st.step_extract(str(tmp_path / 'out1.json'), objects='Справочник.*')
+    assert ext_all['objects'] == 2
+    # точный объект — только его записи
+    ext_one = st.step_extract(str(tmp_path / 'out2.json'), objects='Справочник.1')
+    assert ext_one['objects'] == 2
+    # несуществующий раздел — пусто
+    ext_none = st.step_extract(str(tmp_path / 'out3.json'), objects='Документ.*')
+    assert ext_none['objects'] == 0
 
 
 def test_binding_blocks_wrong_source(tmp_path: Path):

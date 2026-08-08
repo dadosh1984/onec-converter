@@ -62,8 +62,9 @@ PLAYBOOK: list[dict[str, str]] = [
      'goal': 'Валидация TOON-правил маппинга + промпт для LLM'},
     {'step': '10', 'command': 'query_table(source_dir, table, filters, limit)',
      'goal': 'Выборочная проверка данных (пример записи, контроль условий)'},
-    {'step': '11', 'command': 'step_extract(out_file)',
-     'goal': 'Извлечение данных источника в промежуточный JSON'},
+    {'step': '11', 'command': 'step_extract(out_file, objects="")',
+     'goal': 'Извлечение данных источника в промежуточный JSON; objects — '
+             'селективный перенос (CSV "Раздел.Имя" / группы "Раздел.*")'},
     {'step': '12', 'command': 'step_prevalidate()',
      'goal': 'Контроль количества, ссылок, дубликатов перед загрузкой'},
     {'step': '13', 'command': 'transform → preview',
@@ -127,7 +128,7 @@ PLAYBOOK_NEXT: dict[str, str] = {
     'compare_structures': 'step_init(project_dir, source_ib_id, target_ib_id, '
                           "source_dir, source_encoding='cp866')",
     'dump_metadata': 'compare_structures(source_dir, target_dir)',
-    'query_table': 'step_extract(out_file) — извлечение данных в intermediate JSON',
+    'query_table': 'step_extract(out_file, objects) — извлечение данных в intermediate JSON; objects — фильтр разделов',
 }
 
 
@@ -182,16 +183,28 @@ class PipelineState:
         self._mark('inspect_source')
         return {'ok': True, 'cached': False, 'metadata': meta}
 
-    def step_extract(self, out_file: str, stream: bool = False) -> dict[str, Any]:
+    def step_extract(self, out_file: str, stream: bool = False,
+                     objects: str = '') -> dict[str, Any]:
+        """Извлечение данных в intermediate JSON.
+
+        objects — селективный перенос (Фаза 29.2): CSV спецификаций
+        "Раздел.Имя" или группы "Раздел.*"; пусто — все данные.
+        """
         if self.source is None:
             raise ValueError('вызовите init')
         reader = self.source.data
         from collections.abc import Iterable as _Iter
 
         from .intermediate import save_json_stream
+        from .objects_filter import ObjectSpec, parse_objects, selects
+
+        specs: list[ObjectSpec] = parse_objects(
+            [o.strip() for o in objects.split(',')]) if objects else []
 
         def _gen() -> _Iter[dict[str, Any]]:
             for table_id, recs in reader.references().items():
+                if specs and not selects(specs, 'Справочник', str(table_id)):
+                    continue
                 for rec in recs:
                     if not rec:
                         continue

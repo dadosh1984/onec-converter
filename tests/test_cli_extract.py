@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from onec_converter.cli import main
-from onec_converter.fake_1cd import FixtureField, FixtureTable, write_fake_1cd
+from onec_converter.fake_1cd import FixtureField, FixtureTable, encode_row, write_fake_1cd
 from tests.fixtures.gen_dat import make_dat
 
 
@@ -103,3 +105,60 @@ def test_extract_8x(tmp_path: Path):
     assert rc == 0
     objs = _load(out)
     assert len(objs) >= 0  # пустая таблица допустима; главное — JSON читается
+
+# ---- Фаза 29.2: селективный перенос по разделам ----
+
+def test_extract_8x_objects_physical_table(tmp_path: Path):
+    """--objects Таблица._REFERENCE3 — только указанная физическая таблица."""
+    fields = [FixtureField('_IDRREF', 'B', length=16),
+              FixtureField('_CODE', 'NC', length=9)]
+    t1 = FixtureTable('_REFERENCE3', fields=fields,
+                      rows=[encode_row(fields, {'_CODE': '0001'})])
+    t2 = FixtureTable('_REFERENCE10', fields=fields,
+                      rows=[encode_row(fields, {'_CODE': '0002'})])
+    cd = tmp_path / 'base8x2'
+    cd.mkdir()
+    write_fake_1cd(cd / '1Cv8.1CD', [t1, t2])
+    out = tmp_path / 'out.json'
+    rc = main(['extract', '--source-dir', str(cd), '--out', str(out),
+               '--objects', 'Таблица._REFERENCE3'])
+    assert rc == 0
+    objs = _load(out)
+    types = {o['type'] for o in objs}
+    assert types == {'Таблица._REFERENCE3'}
+
+
+def test_extract_8x_objects_invalid_spec(tmp_path: Path):
+    cd = tmp_path / 'base8x3'
+    cd.mkdir()
+    write_fake_1cd(cd / '1Cv8.1CD', [])
+    out = tmp_path / 'out.json'
+    rc = main(['extract', '--source-dir', str(cd), '--out', str(out),
+               '--objects', 'Номенклатура'])
+    assert rc == 1  # CLIError: неверный формат
+
+
+BASE_81 = Path(r'E:/SYSTEM/Desktop/AI_Projects/onec_converter/1C_8.1/1Cv8.1CD')
+REQUIRED_BASE_81 = pytest.mark.skipif(
+    not BASE_81.is_file(),
+    reason='реальная база 8.1 отсутствует (read-only)')
+
+
+@REQUIRED_BASE_81
+def test_extract_8x_objects_group_on_real_base():
+    """Маппинг конфигурационных объектов на реальной базе: группа
+    Справочник.* отбирает таблицы _REFERENCE*, не отбирает документы и
+    служебные таблицы (без чтения данных)."""
+    from onec_converter.objects_filter import parse_objects, selects
+    from onec_converter.source_8x_file import read_metadata
+    md = read_metadata(BASE_81)
+    objects = md['objects']
+    assert any(o['kind'] == 'Справочник' and o['table'] for o in objects)
+    specs = parse_objects(['Справочник.*'])
+    refs = [o['table'] for o in objects
+            if o['kind'] == 'Справочник' and o['table']]
+    for t in refs:
+        assert selects(specs, 'Справочник', 'X', table=t), t
+    # служебные таблицы (вне конфигурации) группой не выбираются
+    assert not selects(specs, 'Таблица', '_REFS', table='_REFS')
+    assert not selects(specs, 'Таблица', '_USERPASSWORD', table='_USERPASSWORD')
