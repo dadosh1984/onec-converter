@@ -22,7 +22,15 @@ def test_version(capsys):
     with pytest.raises(SystemExit) as e:
         main(['--version'])
     assert e.value.code == 0
-    assert '0.1.0' in capsys.readouterr().out
+    assert _pkg_version() in capsys.readouterr().out
+
+
+def _pkg_version() -> str:
+    import pathlib
+    import tomllib
+    py = pathlib.Path(__file__).resolve().parents[1] / 'pyproject.toml'
+    data = tomllib.loads(py.read_text(encoding='utf-8'))
+    return data['project']['version']
 
 
 def test_unknown_command_exit_2():
