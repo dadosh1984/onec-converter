@@ -3,6 +3,22 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.10.0 (2026-08)
+
+### Audit-логирование миграции (Фаза 25)
+- Новый модуль `audit.py`: AuditLog (JSONL: время/уровень/операция/объект/
+  GUID/правило/результат), set_audit/get_audit (env ONEC_AUDIT_FILE для MCP),
+  read_audit; уровни INFO/WARN/ERROR.
+- Интеграция: load_direct — событие на каждый перенесённый объект (GUID
+  приёмника), WARN по ненайденным ссылкам, сводка; transform/extract (CLI) —
+  по-объектно; MCP step_extract.
+- CLI: --audit-file (extract/transform/load) + подкоманда `audit --file`
+  (фильтры --level/--op/--obj, --tail, --json, сводка по уровням).
+- docs/playbook.md → «Аудит переноса (ПДн)»; README — audit.
+- Тесты: журнал/уровни/JSONL, load_direct, transform ok+error, extract,
+  CLI-фильтры (+6).
+- План: Фаза 25 ✅.
+
 ## 0.9.0 (2026-08)
 
 ### Полный сценарий копии базы (Фаза 24: clone-db + rollback)

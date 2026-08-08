@@ -24,6 +24,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from .audit import get_audit
 from .base_reader import Base77
 from .cache import Cache, file_key
 from .inspect_target import ProjectBinding, inspect_target_from_http
@@ -221,12 +222,17 @@ class PipelineState:
             save_json_stream(_gen(), out_file)
             self.extracted = []  # для больших баз не держим в памяти
             self._mark('extract')
+            get_audit().info('extract', obj='stream', result='ok',
+                             detail=out_file)
             return {'ok': True, 'objects': 'stream',
                     'file': out_file, 'stream': True}
         objs = list(_gen())
         self.extracted = objs
         self._mark('extract')
         save_json_batch(objs, out_file)
+        for o in objs:
+            get_audit().info('extract', obj=str(o.get(OBJ_TYPE, '')),
+                             guid=str(o.get('id', '')), result='ok')
         return {'ok': True, 'objects': len(objs), 'file': out_file}
 
     def step_inspect_target(self, target_metadata: dict[str, Any]) -> dict[str, Any]:

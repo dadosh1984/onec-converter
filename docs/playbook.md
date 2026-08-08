@@ -113,3 +113,26 @@ Conformance — проверка, что сервер честно следуе�
 - **Покрытие**: `bash scripts/gates.sh --coverage pytest` — pytest-cov на
   новых модулях (objects_filter, jwt_auth, cache, http_client, mcp_server),
   порог 70% (сейчас 87%).
+
+## Аудит переноса (Фаза 25, ПДн-соответствие)
+
+JSONL-журнал операций миграции: время, уровень (INFO/WARN/ERROR), операция
+(extract/transform/load), объект, GUID приёмника, правило, результат.
+Записывают: `load_direct` (каждый перенесённый объект + сводка + WARN по
+ненайденным ссылкам), `transform`/`extract` (CLI), MCP `step_extract`.
+
+```bash
+# включить журнал (--audit-file на extract/transform/load; для MCP — env
+# ONEC_AUDIT_FILE при старте сервера)
+onec-converter load --direct ./tgt --input batch.json --workdir ./work \
+    --audit-file audit.jsonl
+
+# просмотр/фильтр: --level INFO|WARN|ERROR, --op, --obj, --tail N, --json
+onec-converter audit --file audit.jsonl --level ERROR --op load
+```
+
+Формат записи (JSONL, одна строка — одно событие):
+`{"ts": "...", "level": "INFO", "operation": "load", "obj": "Справочник.Банки",
+ "guid": "16-байт GUID приёмника", "rule": "", "result": "ok", "detail": ""}`
+
+Журнал append-only, пригоден для разбора внешними инструментами.

@@ -48,13 +48,13 @@
 
 Идеи: oscript-library/logos (log4j-стиль), cpr1c/logosFor1c (сквозное логирование).
 
-- [ ] [fact] `src/onec_converter/audit.py`: лог-записи (уровни INFO/WARN/ERROR;
+- [ ] [fact] `src/onec_converter/audit.py`: лог-записи (уровни INFO/WARN/ERROR; ✅
       время, операция, объект, GUID, правило, результат)
-- [ ] [fact] интеграция: `load_direct`/`transform`/`extract` пишут audit-события
+- [ ] [fact] интеграция: `load_direct`/`transform`/`extract` пишут audit-события ✅
       (каждый перенесённый объект: источник→приёмник, правило, время)
-- [ ] [fact] CLI `onec-converter audit --file audit.jsonl` — просмотр/фильтр
-- [ ] [fact] тесты: audit-файл формируется, содержит GUID/правило/время
-- [ ] [assumption] docs: раздел «Аудит переноса (ПДн-соответствие)»
+- [ ] [fact] CLI `onec-converter audit --file audit.jsonl` — просмотр/фильтр ✅
+- [ ] [fact] тесты: audit-файл формируется, содержит GUID/правило/время ✅
+- [ ] [assumption] docs: раздел «Аудит переноса (ПДн-соответствие)» ✅
 
 ## Фаза 26 — Новые коннекторы: техжурнал 1С + релизы конфигураций
 

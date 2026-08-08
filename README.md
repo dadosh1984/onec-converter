@@ -138,6 +138,15 @@ onec-converter clone-db --source-dir 1C_8.1 --target-dir stand/ \
 `load` автоматически сохраняет `workdir/snapshot.1CD` приёмника до записи
 (откат при сбое); отключить: `--no-snapshot`.
 
+### audit — журнал переноса (Фаза 25)
+```
+onec-converter load --direct ./tgt --input batch.json --workdir ./work     --audit-file audit.jsonl        # extract/transform/load пишут события
+onec-converter audit --file audit.jsonl --level ERROR --op load   # фильтр
+```
+JSONL-журнал: время, уровень, операция, объект, GUID приёмника, правило,
+результат (ПДн-аудит «кто/что/когда»). Для MCP — `ONEC_AUDIT_FILE` при
+старте сервера.
+
 ### status — состояние пайплайна
 ```
 onec-converter status --project-dir project/

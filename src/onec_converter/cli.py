@@ -9,12 +9,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .audit import get_audit, read_audit, set_audit
 from .http_client import HttpClient83
 from .intermediate import (
     OBJ_ATTRS,
@@ -177,6 +179,11 @@ def cmd_extract(args: argparse.Namespace) -> int:
         anon = Anonymizer(fields=fields)
         for obj in objs:
             obj[OBJ_ATTRS] = anon.apply(obj[OBJ_ATTRS])
+    # аудит (Фаза 25): каждый извлечённый объект — тип, идентификатор, время
+    audit = get_audit()
+    for obj in objs:
+        audit.info('extract', obj=str(obj.get(OBJ_TYPE, '')),
+                   guid=str(obj.get(OBJ_ID, '')), result='ok')
     save_json_batch(objs, args.out)
     print(json.dumps({'ok': True, 'objects': len(objs), 'file': args.out},
                      ensure_ascii=False))
@@ -228,7 +235,12 @@ def cmd_transform(args: argparse.Namespace) -> int:
             continue
         try:
             out.append(transform_object(obj, rule, resolver, rules.get('enums')))
+            get_audit().info('transform', obj=str(obj[OBJ_TYPE]),
+                             rule=str(rule.get('source', '')), result='ok')
         except TransformError as exc:
+            get_audit().error('transform', obj=str(obj[OBJ_TYPE]),
+                              rule=str(rule.get('source', '')), result='error',
+                              detail=str(exc))
             problems.append(str(exc))
     vr = validate_batch(out)
     if not vr.ok:
@@ -511,6 +523,35 @@ def cmd_clone_db(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit(args: argparse.Namespace) -> int:
+    """Просмотр/фильтр журнала аудита (Фаза 25): --level, --op, --obj,
+    --tail (последние N). Без --json — читаемые строки + сводка."""
+    try:
+        recs = read_audit(args.file)
+    except (OSError, ValueError) as exc:
+        return _err(f'audit: {exc}')
+    if args.level:
+        recs = [r for r in recs if r['level'] == args.level.upper()]
+    if args.op:
+        recs = [r for r in recs if r['operation'] == args.op]
+    if args.obj:
+        recs = [r for r in recs if args.obj in r['obj']]
+    if args.tail:
+        recs = recs[-args.tail:]
+    counts: dict[str, int] = {}
+    for r in recs:
+        counts[r['level']] = counts.get(r['level'], 0) + 1
+        if args.json:
+            print(json.dumps(r, ensure_ascii=False))
+        else:
+            print(f"{r['ts']} {r['level']:<5} {r['operation']:<9} "
+                  f"{r['obj']} {r['result']}" +
+                  (f" [{r['guid']}]" if r['guid'] else ''))
+    print(json.dumps({'counts': counts, 'total': len(recs)},
+                     ensure_ascii=False), file=sys.stderr)
+    return 0
+
+
 # ---- entry point ----
 
 def build_parser() -> argparse.ArgumentParser:
@@ -536,6 +577,8 @@ def build_parser() -> argparse.ArgumentParser:
                              'или группы "Раздел.*" (Справочник.*/Документ.*/'
                              'Регистр.*), физические таблицы "Таблица._REFERENCE3"; '
                              'пусто — все данные')
+    p_extract.add_argument('--audit-file', default='',
+                           help='JSONL-журнал аудита переноса (Фаза 25)')
 
     p_map = sub.add_parser('map', help='Правила маппинга (TOON)')
     p_map.add_argument('--rules-file', default='')
@@ -549,6 +592,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_transform.add_argument('--input', required=True)
     p_transform.add_argument('--out', default='')
     p_transform.add_argument('--preview', type=int, default=0)
+    p_transform.add_argument('--audit-file', default='',
+                             help='JSONL-журнал аудита переноса (Фаза 25)')
 
     p_load = sub.add_parser('load', help='Загрузка в приёмник (файл/HTTP/прямая запись)')
     p_load.add_argument('--input', required=True)
@@ -572,6 +617,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help='OAuth2 client_secret (при --token-url)')
     p_load.add_argument('--retries', type=int, default=0,
                         help='число повторов HTTP (0 = из конфига/по умолчанию)')
+    p_load.add_argument('--audit-file', default='',
+                        help='JSONL-журнал аудита переноса (Фаза 25)')
 
     p_status = sub.add_parser('status', help='Состояние пайплайна')
     p_status.add_argument('--project-dir', default='.')
@@ -617,11 +664,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_clone.add_argument('--with-rules', default='',
                          help='скопировать файл правил маппинга рядом (стенд)')
 
+    p_audit = sub.add_parser('audit', help='Просмотр/фильтр журнала аудита (Фаза 25)')
+    p_audit.add_argument('--file', required=True, help='JSONL-журнал (audit.jsonl)')
+    p_audit.add_argument('--level', default='', help='INFO|WARN|ERROR')
+    p_audit.add_argument('--op', default='', help='extract|transform|load')
+    p_audit.add_argument('--obj', default='', help='подстрока имени объекта')
+    p_audit.add_argument('--tail', type=int, default=0, help='последние N записей')
+    p_audit.add_argument('--json', action='store_true', help='полные JSON-записи')
+
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # аудит (Фаза 25): файл из --audit-file или ONEC_AUDIT_FILE (для MCP)
+    audit_file = getattr(args, 'audit_file', '') or os.environ.get('ONEC_AUDIT_FILE', '')
+    if audit_file:
+        set_audit(audit_file)
     handlers: dict[str, Callable[[argparse.Namespace], int]] = {
         'inspect': cmd_inspect,
         'extract': cmd_extract,
@@ -637,6 +696,7 @@ def main(argv: list[str] | None = None) -> int:
         'dump-records': cmd_dump_records,
         'metrics': cmd_metrics,
         'clone-db': cmd_clone_db,
+        'audit': cmd_audit,
     }
     try:
         handler = handlers.get(args.command or '')

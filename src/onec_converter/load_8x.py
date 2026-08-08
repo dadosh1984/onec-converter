@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .audit import get_audit
 from .load_8x_refs import ReceiverReferenceIndex, _encode_field, make_vt_row
 from .source_8x_file import Database1CD, TableDef, read_metadata
 from .strict import validate_object
@@ -256,6 +257,12 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
                 for i, r in enumerate(ts.get('rows') or []):
                     vrow = make_vt_row(vt_table, idref, i + 1, r)
                     vt_rows_by_table.setdefault(vt_table.name, []).append(vrow)
+            # аудит (Фаза 25): каждый перенесённый объект — источник→приёмник,
+            # GUID приёмника, время
+            get_audit().info('load', obj=obj_type, guid=idref.hex(),
+                             rule=str(obj.get('_rule') or ''), result='ok')
+        for w in ref_warnings:
+            get_audit().warning('load', obj=str(obj_type or ''), detail=w)
 
     tables_stat: dict[str, int] = {}
     try:
@@ -284,6 +291,8 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
     if verify_after:
         report = _verify_direct(objects, final, index, prefix_by_table,
                                 idref_counter)
+    get_audit().info('load', obj=str(len(objects)), result='ok',
+                     detail=f'total={len(objects)} tables={tables_stat}')
     return {'ok': True, 'copy_path': str(final), 'total': len(objects),
             'tables': tables_stat, 'ref_warnings': ref_warnings, 'verify': report,
             'snapshot': str(snap_path) if snap_path else None}
