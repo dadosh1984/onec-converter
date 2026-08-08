@@ -2,10 +2,10 @@
 
 - **Status:** SUCCESS
 - **Tasks:** 13/13 done
-**Guard:** lint:SKIP, type:PASS, test:PASS, drift:PASS, yagni:PASS, economy:PASS, security:PASS, verifiability:PASS
+**Guard:** lint:SKIP, type:PASS, test:PASS, drift:PASS, yagni:PASS, economy:PASS, security:PASS, policy:PASS, verifiability:PASS
 - **Budget:** Фаза 5: парсер 1CD + status-тул + интеграционные тесты
 - **Constraints:** Фаза 5: парсер 1CD + status-тул + интеграционные тесты
-- **Generated:** 2026-08-08T10:50:12.994Z
+- **Generated:** 2026-08-08T12:29:24.292Z
 
 ## Checklist
 
@@ -30,15 +30,16 @@
 | lint | SKIP | no lint script in package.json |
 | type | PASS | ok |
 | test | PASS | [orion] no failures detected — summary:
- Test Files  32 passed (32)
-      Tests  32 passed (32)
-   Duration  2.40s (transform 2.20s, setup 0ms, collect 4.76s, tests 180ms, environment 9ms, prepare 7.32s)
+ Test Files  10 passed (10)
+      Tests  10 passed (10)
+   Duration  667ms (transform 606ms, setup 0ms, collect 997ms, tests 51ms, environment 3ms, prepare 1.92s)
 
-[orion: −4155 B (−95.3%) ≈ 1039 tok — ≈ tokens: bytes/4 estimate (no tokenizer)] |
+[orion: −1439 B (−87.6%) ≈ 360 tok — ≈ tokens: bytes/4 estimate (no tokenizer)] |
 | drift | PASS | matched 1 exported capabilities |
-| yagni | PASS | no snippets to check (repo median: 78 LOC, 3 imports) |
-| economy | PASS | cache 14.2 KB of 100.0 MB (55 entries) — within budget; ≈ 457087 tok saved across 323 compress op(s) |
+| yagni | PASS | no snippets to check (repo median: 75 LOC, 3 imports) |
+| economy | PASS | cache 5.8 KB of 100.0 MB (18 entries) — within budget; ≈ 460546 tok saved across 331 compress op(s) |
 | security | PASS | no obvious issues |
+| policy | PASS | no .orion/policy.json — no project gates to enforce |
 | verifiability | PASS | oracles: test-runner, type-check · verifiability level 3 — strong checks present |
 
 ## Artifacts
@@ -46,6 +47,7 @@
 - `changes/1-8-x-1cv8/proposal.md`
 - `changes/1-8-x-1cv8/design.md`
 - `changes/1-8-x-1cv8/tasks.md`
+- `changes/1-8-x-1cv8/result.md`
 - `reports/1-8-x-1cv8/guard-report.md`
 - `changes/1-8-x-1cv8/specs/parser-1cd/spec.md`
 - `changes/1-8-x-1cv8/snippets/`
@@ -53,12 +55,11 @@
 ## Уроки и решения
 
 > missing exported: parser-1cd → fix the drift check, then re-run orion shield 1-8-x-1cv8
-> [mcp-python-1-7] missing exported: mcp-python-1-7 → fix the drift check, then re-run orion shield mcp-python-1-7
-> [mcp-python-1-7] missing exported: core → fix the drift check, then re-run orion shield mcp-python-1-7
-> [mcp-python-1-7] Command failed: pnpm test
- → fix the test check, then re-run orion shield mcp-python-1-7
-> [mcp-python-1-7] Command failed: pnpm exec tsc --noEmit
- → fix the type check, then re-run orion shield mcp-python-1-7
+> [mcp-python-1-7] task not green: [assumption] `source_8x_file`: СВОЙ парсер `1Cv8.1CD`: заголовок, страницы, таблицы, — Command failed: pnpm vitest run tests/assumption_source_8x_file_1cv8_1cd.test.ts · Error: Command failed: pnpm vitest run tests/assumptio → fix the task, then re-run orion forge mcp-python-1-7
+> [mcp-python-1-7] task not green: [assumption] Интеграционный тест чтения на реальной базе `БАЗА 31.07.202` — Command failed: pnpm vitest run tests/assumption_31_07_202.test.ts · Error: Command failed: pnpm vitest run tests/assumption_31_07_202.test.ts → fix the task, then re-run orion forge mcp-python-1-7
+> [mcp-python-1-7] task not green: [assumption] `extension_83`: исходники расширения 1С 8.3 (XML): HTTP-сервис `GET /metadata`, `POST /load` (создание/обновление объектов, табличные части); README по сборке/установке в 1С — Command failed: pnpm vitest run tes → fix the task, then re-run orion forge mcp-python-1-7
+> [mcp-python-1-7] task not green: [spike] Файлы объектов 8.1-эпохи: полный layout (реквизиты, табличные части, типы, — Command failed: pnpm vitest run tests/spike_8_1_layout.test.ts · Error: Command failed: pnpm vitest run tests/spike_8_1_layout.test.ts → fix the task, then re-run orion forge mcp-python-1-7
+> [mcp-python-1-7] task not green: [fact] `v77_metadata`: парсер `1Cv7.MD` (OLE2, olefile): список справочников, документов, — Command failed: pnpm vitest run tests/fact_v77_metadata_1cv7_md_ole2_olefile.test.ts · Error: Command failed: pnpm vitest run tests/ → fix the task, then re-run orion forge mcp-python-1-7
 
 ## Next steps
 
