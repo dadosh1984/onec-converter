@@ -14,6 +14,16 @@
 set -euo pipefail
 
 ONEC_TEST_TMP="${ONEC_TEST_TMP:-${TMPDIR:-/tmp}/onec-pytest}"
+
+# Тесты всегда в E:\test (см. AGENTS.md): tmp-каталог pytest на диск с местом.
+# Задаём basetemp и корневой pytest-кеш (tempfile) на ONEC_TEST_TMP.
+if [[ -n "${ONEC_TEST_TMP:-}" ]]; then
+  mkdir -p "$ONEC_TEST_TMP"
+  export TMPDIR="$ONEC_TEST_TMP"
+  export TEMP="$ONEC_TEST_TMP"
+  export TMP="$ONEC_TEST_TMP"
+  export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} --basetemp=${ONEC_TEST_TMP}"
+fi
 STRICT_STEPS=0
 ARGS=()
 for a in "$@"; do
