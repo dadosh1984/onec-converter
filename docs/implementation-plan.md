@@ -255,16 +255,16 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 
 ## Фаза 33 — JWT-контур целиком (0.16.0)
 
-- [ ] [fact] CLI mint-token: выпуск Bearer-токена на общем секрете
+- [x] [fact] CLI mint-token: выпуск Bearer-токена на общем секрете
       (jwt_auth.mint_jwt) — `onec-converter mint-token --secret ...`
-- [ ] [fact] http_client: режим mint-token (--secret) для `load --http`,
+- [x] [fact] http_client: режим mint-token (--secret) для `load --http`,
       тест прохождения токена в Authorization
-- [ ] [fact] openapi: bearerAuth-схема документирована
-- [ ] [fact] extension_83/README + README: token_url — внешний OAuth2-сервер
+- [x] [fact] openapi: bearerAuth-схема документирована
+- [x] [fact] extension_83/README + README: token_url — внешний OAuth2-сервер
       (не входит в поставку), mint-token — локальный режим
-- [ ] [fact] тест согласования mint_jwt ↔ ПроверитьJWT (эталонный вектор
+- [x] [fact] тест согласования mint_jwt ↔ ПроверитьJWT (эталонный вектор
       HMAC-SHA256)
-- [ ] [assumption] ворота зелёные; релиз 0.16.0
+- [x] [assumption] ворота зелёные; релиз 0.16.0
 
 ## Фаза 34 — Производительность ядра (0.17.0)
 

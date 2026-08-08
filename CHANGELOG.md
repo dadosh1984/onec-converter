@@ -3,6 +3,19 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.16.0 (2026-08)
+
+### JWT-контур целиком (Фаза 33)
+- CLI `mint-token --secret [--issuer --exp-min]`: выпуск локального HS256
+  JWT Bearer-токена на общем секрете (без OAuth2-сервера).
+- `load --http --secret`: локальный mint-token — клиент выпускает JWT на
+  месте и шлёт Authorization: Bearer (token_url/secret взаимоисключающие).
+- extension_83/README + README: документированы три режима аутентификации
+  (X-API-Key, OAuth2, локальный mint-token).
+- тесты +6: mint-token CLI, согласование mint_jwt с BSL-логикой
+  ПроверитьJWT (base64url+HMAC-SHA256 по схеме Module.bsl), secret-режим
+  HttpClient83 (Bearer без X-API-Key).
+
 ## 0.15.0 (2026-08)
 
 ### Дефекты по итогам внешнего анализа (Фаза 32)

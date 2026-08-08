@@ -44,6 +44,26 @@ HTTP-сервис принимает **любой из двух** способо
 клиентом по HS256 с тем же секретом. `ПроверитьJWT` реализована в `Module.bsl`
 на чистом 1С (HMAC без внешних библиотек); при любой ошибке — 401.
 
+**Локальный токен (без OAuth2-сервера): Фаза 33.** Если внешнего сервера
+нет, токен можно выпустить из CLI на том же общем секрете, что задан в
+приёмнике (`ОжидаемыйКлюч`):
+
+```bash
+# секрет приёмника СОВПАДАЕТ с ОжидаемыйКлюч в Module.bsl
+onec-converter mint-token --secret "CHANGE-ME-AND-KEEP-SECRET"
+# печатает refresh-токен JWT (HS256, issuer=onec-converter)
+```
+
+И передать его в `load`:
+```bash
+onec-converter load --http http://<server>/loader/hs \
+    --secret "CHANGE-ME-AND-KEEP-SECRET" --input batch.json
+```
+Здесь `--secret` включает локальный mint-token: клиент выпускает HS256 JWT на
+месте и шлёт `Authorization: Bearer <jwt>` — без обращения к какому-либо
+OAuth2-эндпоинту. `--token-url` (внешний сервер) и `--secret` (локальный
+mint) — взаимоисключающие; приоритет у `--token-url`.
+
 Без верного ключа/токена сервер отвечает **401 Unauthorized** (и для GET /metadata,
 и для POST /load).
 

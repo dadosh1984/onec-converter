@@ -270,11 +270,13 @@ async def _http_load(objs: list[dict[str, Any]],
     token_url = args.token_url or cfg.token_url
     client_id = args.client_id or cfg.client_id
     client_secret = args.client_secret or cfg.client_secret
+    secret = args.secret or cfg.secret or cfg._raw.get('secret', '')
     client = HttpClient83(args.http, retries=retries,
                           api_key=api_key or None,
                           token_url=token_url or None,
                           client_id=client_id or None,
-                          client_secret=client_secret or None)
+                          client_secret=client_secret or None,
+                          secret=secret or None)
     try:
         results = await client.load(objs, args.source_ib, args.target_ib)
     finally:
@@ -294,6 +296,21 @@ def cmd_export_kd3(args: argparse.Namespace) -> int:
     except Kd3Error as exc:
         return _err(str(exc))
     print(json.dumps(rep, ensure_ascii=False))
+    return 0
+
+
+def cmd_mint_token(args: argparse.Namespace) -> int:
+    """Выпуск локального Bearer-токена (HS256 JWT) на общем секрете (Фаза 33).
+
+    Позволяет использовать авторизацию по JWT на приёмнике без
+    OAuth2-сервера: токен принимается Module.bsl::ПроверитьJWT.
+    """
+    from .jwt_auth import mint_jwt
+
+    if not args.secret:
+        return _err('не задан --secret')
+    token = mint_jwt(args.secret, args.issuer, args.exp_min * 60)
+    print(token)
     return 0
 
 
@@ -728,6 +745,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help='OAuth2 client_id (при --token-url)')
     p_load.add_argument('--client-secret', default='',
                         help='OAuth2 client_secret (при --token-url)')
+    p_load.add_argument('--secret', default='',
+                        help='общий секрет для локального mint-token (HS256 JWT, Фаза 33)')
     p_load.add_argument('--retries', type=int, default=0,
                         help='число повторов HTTP (0 = из конфига/по умолчанию)')
     p_load.add_argument('--audit-file', default='',
@@ -827,6 +846,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_kd3.add_argument('--rules', required=True, help='файл правил rules.json')
     p_kd3.add_argument('--out', default='', help='запись XML-файла')
 
+    p_mint = sub.add_parser('mint-token',
+                            help='Выпуск локального JWT Bearer-токена (Фаза 33)')
+    p_mint.add_argument('--secret', required=True,
+                        help='общий секрет приёмника (как в Module.bsl ОжидаемыйКлюч)')
+    p_mint.add_argument('--issuer', default='onec-converter',
+                        help='issuer токена')
+    p_mint.add_argument('--exp-min', type=int, default=60,
+                        help='срок жизни в минутах')
+
     return p
 
 
@@ -857,6 +885,7 @@ def main(argv: list[str] | None = None) -> int:
         'dump-report': cmd_dump_report,
         'sonar-report': cmd_sonar_report,
         'export-kd3': cmd_export_kd3,
+        'mint-token': cmd_mint_token,
     }
     try:
         handler = handlers.get(args.command or '')

@@ -54,7 +54,9 @@ def test_load_http_ok(tmp_path: Path, monkeypatch, capsys):
                      api_key: str | None = None,
                      token_url: str | None = None,
                      client_id: str | None = None,
-                     client_secret: str | None = None):
+                     client_secret: str | None = None,
+                     secret: str | None = None,
+                     issuer: str = 'onec-converter'):
             self.base_url = base_url
 
         async def load(self, objects, source_ib, target_ib, replace=False):
@@ -83,7 +85,9 @@ def test_load_http_errors(tmp_path: Path, monkeypatch, capsys):
                      api_key: str | None = None,
                      token_url: str | None = None,
                      client_id: str | None = None,
-                     client_secret: str | None = None):
+                     client_secret: str | None = None,
+                     secret: str | None = None,
+                     issuer: str = 'onec-converter'):
             self.base_url = base_url
 
         async def load(self, objects, source_ib, target_ib, replace=False):

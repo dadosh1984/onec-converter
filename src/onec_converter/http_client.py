@@ -50,17 +50,34 @@ class HttpClient83:
     token_url: str | None = None
     client_id: str | None = None
     client_secret: str | None = None
+    # Локальный mint-token (Фаза 33): shared secret для выпуска HS256 JWT
+    # на месте, без OAuth2-сервера (см. jwt_auth.mint_jwt). Используется,
+    # когда задан secret, но token_url не задан.
+    secret: str | None = None
+    issuer: str = 'onec-converter'
     _client: httpx.AsyncClient | None = field(default=None, init=False, repr=False)
     _token: str | None = field(default=None, init=False, repr=False)
     _token_exp: float = field(default=0.0, init=False, repr=False)
 
     async def _ensure_token(self) -> None:
-        """Получает OAuth2-токен (grant_type=client_credentials) и кеширует
-        его с запасом 10% до expires_in. Без token_url — режим X-API-Key."""
-        if not self.token_url:
+        """Обеспечить действующий Bearer-токен.
+
+        token_url — OAuth2 client-credentials (внешний сервер); secret без
+        token_url — локальный mint-token (HS256 JWT на shared secret, без
+        инфраструктуры). Без обоих — режим X-API-Key.
+        """
+        if not self.token_url and not self.secret:
             return
         if self._token and time.time() < self._token_exp:
             return
+        if self.secret and not self.token_url:
+            from .jwt_auth import mint_jwt
+            ttl = 3600
+            self._token = mint_jwt(self.secret, self.issuer, ttl, extra={
+                'sub': 'onec-loader'})
+            self._token_exp = time.time() + ttl * 0.9
+            return
+        assert self.token_url is not None  # ветка OAuth2 (token_url задан)
         payload = {'grant_type': 'client_credentials',
                    'client_id': self.client_id or '',
                    'client_secret': self.client_secret or ''}

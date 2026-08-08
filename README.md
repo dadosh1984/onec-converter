@@ -111,7 +111,7 @@ onec-converter load --input transformed.json --http http://host/base \
 ```
 HTTP-режим использует `HttpClient83` с ретраями; при ошибках — exit 1 и отчёт.
 
-**Аутентификация приёмника (Фаза 22):** два режима.
+**Аутентификация приёмника (Фаза 22):** три режима.
 1. **X-API-Key** (простой): `--api-key секрет` — заголовок `X-API-Key`.
 2. **OAuth2 client-credentials** (JWT): `--token-url http://host/token \
    --client-id id --client-secret секрет` — клиент получает Bearer-токен
@@ -119,6 +119,12 @@ HTTP-режим использует `HttpClient83` с ретраями; при 
    `Authorization: Bearer <jwt>`. Приёмник проверяет подпись HS256
    (ключ — тот же секрет), срок жизни и issuer. Параметры можно задать
    в `onec.toml` секцией `[auth]`.
+3. **Локальный mint-token** (Фаза 33, без OAuth2-сервера):
+   `--secret секрет` — клиент выпускает HS256 JWT на месте
+   (`onec-converter mint-token --secret секрет` для отдельных токенов)
+   и шлёт `Authorization: Bearer <jwt>`. Секрет тот же, что задан
+   в приёмнике (`ОжидаемыйКлюч` Module.bsl). `--token-url` и `--secret`
+   взаимоисключающие.
 
 ```toml
 [auth]

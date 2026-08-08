@@ -1,9 +1,9 @@
 # Карта команд onec-converter (Фаза 29.1)
 
-Сгенерировано из фактического реестра: CLI 20 подкоманд, MCP 13 тулов.
+Сгенерировано из фактического реестра: CLI 21 подкоманда, MCP 13 тулов.
 Поток данных: inspect → extract → map → transform → load → verify.
 
-## CLI (20)
+## CLI (21)
 
 | Команда | Вход | Выход | Назначение |
 |---|---|---|---|
@@ -27,6 +27,7 @@
 | dump-report | file, s3 | S3 | экспорт отчёта в S3 (SigV4) |
 | sonar-report | target | XML/JSON | отчёт ruff в sonar-формате |
 | export-kd3 | rules.json | XML | правила TOON в XML КД3-стиля |
+| mint-token | secret | JWT | выпуск локального HS256 Bearer-токена (Фаза 33) |
 
 Общие флаги: `--source-dir`, `--out`, `--format json|xlsx`, `--audit-file`.
 

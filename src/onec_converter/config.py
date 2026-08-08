@@ -26,6 +26,7 @@ class ProjectConfig:
     token_url: str = ''
     client_id: str = ''
     client_secret: str = ''
+    secret: str = ''  # общий секрет mint-token (Фаза 33)
     # прочие ключи сохраняются как есть
     _raw: dict[str, Any] = field(default_factory=dict)
 
@@ -63,7 +64,8 @@ class ProjectConfig:
         auth = parser['auth'] if parser.has_section('auth') else sec
         for src, attr in [('token_url', 'token_url'),
                           ('client_id', 'client_id'),
-                          ('client_secret', 'client_secret')]:
+                          ('client_secret', 'client_secret'),
+                          ('secret', 'secret')]:
             if src in auth:
                 setattr(cfg, attr, auth[src].strip('"'))
         cfg._raw = {k: sec[k] for k in sec}
@@ -75,7 +77,7 @@ class ProjectConfig:
                              'target_url': self.target_url, 'retries': self.retries,
                              'tmp_dir': self.tmp_dir,
                              'token_url': self.token_url, 'client_id': self.client_id,
-                             'client_secret': self.client_secret}
+                             'client_secret': self.client_secret, 'secret': self.secret}
         return d
 
 
