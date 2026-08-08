@@ -42,12 +42,14 @@ class HttpClient83:
     timeout: float = 60.0
     retries: int = 3
     batch_size: int = 500
+    transport: httpx.AsyncBaseTransport | None = None
     _client: httpx.AsyncClient | None = field(default=None, init=False, repr=False)
 
     async def client(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self.base_url,
-                                             timeout=httpx.Timeout(self.timeout))
+                                             timeout=httpx.Timeout(self.timeout),
+                                             transport=self.transport)
         return self._client
 
     async def aclose(self) -> None:
@@ -62,7 +64,8 @@ class HttpClient83:
             try:
                 r = await c.request(method, path, json=json)
                 if r.status_code in (200, 201):
-                    return r.json()
+                    data: dict[str, Any] = r.json()
+                    return data
                 if r.status_code in (400, 409):
                     raise HttpServiceError(f'HTTP {r.status_code}: {r.text[:500]}')
             except httpx.TransportError as exc:
