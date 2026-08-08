@@ -10,9 +10,11 @@ import argparse
 import asyncio
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
+from .http_client import HttpClient83
 from .intermediate import (
     OBJ_ATTRS,
     OBJ_ID,
@@ -22,7 +24,7 @@ from .intermediate import (
     load_json_batch,
     save_json_batch,
 )
-from .mapping import build_prompt, load_rules, validate_rules
+from .mapping import MappingError, build_prompt, load_rules
 from .resolver import RefResolver
 from .transform import TransformError, transform_object
 from .validate import validate_batch
@@ -56,7 +58,7 @@ def cmd_inspect(args: argparse.Namespace) -> int:
 
     ver = _detect_version(args.source_dir)
     if ver == '77':
-        base = Base77(args.source_dir, encoding=args.source_encoding)
+        base = Base77(Path(args.source_dir), encoding=args.source_encoding)
         reader = base.data
         meta: dict[str, Any] = {
             'version': '7.7',
@@ -82,7 +84,7 @@ def cmd_inspect(args: argparse.Namespace) -> int:
 def _extract_77(source_dir: str, encoding: str, limit: int,
                 only: list[str]) -> list[dict[str, Any]]:
     from .base_reader import Base77
-    reader = Base77(source_dir, encoding=encoding).data
+    reader = Base77(Path(source_dir), encoding=encoding).data
     objs: list[dict[str, Any]] = []
     for table_id, recs in reader.references().items():
         obj_type = f'Справочник.{table_id}'
@@ -161,12 +163,10 @@ def cmd_map(args: argparse.Namespace) -> int:
         return 0
     if not args.rules_file:
         return _err('укажите --rules-file или --llm-prompt')
-    rules = load_rules(args.rules_file)
-    errors = validate_rules(rules)
-    if errors:
-        for e in errors:
-            print(f'  - {e}', file=sys.stderr)
-        return _err(f'правила невалидны ({len(errors)})')
+    try:
+        rules = load_rules(args.rules_file)
+    except MappingError as exc:
+        return _err(str(exc))
     print(json.dumps({'ok': True, 'objects': len(rules.get('objects', [])),
                       'enums': len(rules.get('enums', {}))}, ensure_ascii=False))
     return 0
@@ -176,10 +176,10 @@ def cmd_map(args: argparse.Namespace) -> int:
 
 def cmd_transform(args: argparse.Namespace) -> int:
     """Применение правил к intermediate (--preview — dry-run первых N строк)."""
-    rules = load_rules(args.rules_file)
-    errors = validate_rules(rules)
-    if errors:
-        return _err(f'правила невалидны ({len(errors)})')
+    try:
+        rules = load_rules(args.rules_file)
+    except MappingError as exc:
+        return _err(str(exc))
     objs = load_json_batch(args.input)
     resolver = RefResolver()
     resolver.build(objs)
@@ -214,7 +214,6 @@ def cmd_transform(args: argparse.Namespace) -> int:
 
 async def _http_load(objs: list[dict[str, Any]],
                      args: argparse.Namespace) -> tuple[int, int, list[str]]:
-    from .http_client import HttpClient83
     client = HttpClient83(args.http)
     try:
         results = await client.load(objs, args.source_ib, args.target_ib)
@@ -251,10 +250,23 @@ def cmd_load(args: argparse.Namespace) -> int:
 # ---- status ----
 
 def cmd_status(args: argparse.Namespace) -> int:
-    """Состояние пайплайна в project-dir (коннекторы, кеш, последний шаг, метрики)."""
+    """Состояние пайплайна в project-dir (коннекторы, кеш, последний шаг, метрики).
+
+    Загружает сохранённый project.json (binding), кеш сканируется в каталоге
+    проекта; коннекторы/последний шаг — состояние текущего процесса.
+    """
+    from .cache import Cache
+    from .inspect_target import ProjectBinding, ProjectError
     from .mcp_server import PipelineState
-    st = PipelineState(Path(args.project_dir)).step_status()
-    print(json.dumps(st, ensure_ascii=False, indent=2))
+
+    project = Path(args.project_dir)
+    st = PipelineState(project)
+    st.cache = Cache(project / '.onec_cache')
+    try:
+        st.binding = ProjectBinding.load(project)
+    except ProjectError:
+        pass
+    print(json.dumps(st.step_status(), ensure_ascii=False, indent=2))
     return 0
 
 

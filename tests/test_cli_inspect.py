@@ -26,7 +26,7 @@ def test_inspect_77(tmp_path: Path, capsys):
     meta = json.loads(capsys.readouterr().out)
     assert meta['version'] == '7.7'
     assert meta['references_tables'] == 1
-    assert meta['unique_ids'] == {1: 2}
+    assert meta['unique_ids'] == {'1': 2}  # ключи JSON — строки после round-trip
 
 
 def test_inspect_77_cp1251(tmp_path: Path, capsys):

@@ -4,8 +4,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import httpx
-
 from onec_converter.cli import main
 from onec_converter.intermediate import make_object
 

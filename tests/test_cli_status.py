@@ -20,7 +20,8 @@ def test_status_empty_project(tmp_path: Path, capsys):
 
 
 def test_status_after_init(tmp_path: Path, capsys):
-    """После init: файловый коннектор настроен, last_step='init'."""
+    """После init: binding загружен из project.json; коннекторы/последний
+    шаг — состояние нового процесса (источник не открыт, last_step не персистится)."""
     base = tmp_path / 'base77'
     base.mkdir()
     (base / '1Cv7.MD').write_bytes(b'd0cf11e0')
@@ -33,6 +34,7 @@ def test_status_after_init(tmp_path: Path, capsys):
     rc = main(['status', '--project-dir', str(tmp_path / 'proj')])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
-    assert out['connectors']['file']['configured'] is True
-    assert out['last_step'] == 'init'
+    assert out['ok'] is True
     assert out['binding'] == {'source': 'srcA', 'target': 'tgtX'}
+    assert out['connectors']['file']['configured'] is False
+    assert out['last_step'] is None
