@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import shutil
 import struct
+import warnings
 from pathlib import Path
 
 from .fake_1cd import FixtureTable, build_fake_1cd
@@ -27,6 +28,10 @@ OBJ_SIG = b'\x1c\xfd'
 
 class WriteError(Exception):
     """Ошибка прямой записи в 1CD."""
+
+
+class LockError(WriteError):
+    """База открыта/используется — запись запрещена (Фаза 12)."""
 
 
 def copy_1cd(src: str | Path, dst: str | Path) -> Path:
@@ -64,31 +69,62 @@ def _write_page(path: Path, num: int, data: bytes, page_size: int = PAGE_SIZE) -
 
 def _read_object(path: Path, header_page: int,
                  page_size: int = PAGE_SIZE) -> tuple[list[int], bytes]:
-    """FAT-список страниц и данные объекта по странице-заголовку (level 0)."""
+    """FAT-список страниц и данные объекта (fat_level 0/1).
+
+    Возвращает (страницы данных, данные) — для записи используйте
+    `_read_object_full` (нужны также indirect-страницы).
+    """
+    _, pages, _, data = _read_object_full(path, header_page, page_size)
+    return pages, data
+
+
+def _read_object_full(path: Path, header_page: int,
+                      page_size: int = PAGE_SIZE) \
+        -> tuple[int, list[int], list[int], bytes]:
+    """(fat_level, страницы данных, indirect-страницы, данные) объекта."""
     buf = _read_page(path, header_page, page_size)
     if buf[:2] != OBJ_SIG:
         raise WriteError(f'не объект БД на странице {header_page}: {buf[:2].hex()}')
     fat_level = struct.unpack('<H', buf[2:4])[0]
-    if fat_level != 0:
-        raise WriteError(f'fat_level {fat_level} не поддерживается (только 0)')
     length = struct.unpack('<Q', buf[16:24])[0]
     entries = (page_size - PAGE_HEADER_SIZE) // 4
     fat = struct.unpack(f'<{entries}I', buf[PAGE_HEADER_SIZE:])
-    pages = [p for p in fat if p != 0]
-    pages = pages[: (length + page_size - 1) // page_size]
+    if fat_level == 0:
+        indirect: list[int] = []
+        pages = [p for p in fat if p != 0]
+        pages = pages[: (length + page_size - 1) // page_size]
+    elif fat_level == 1:
+        indirect = [ip for ip in fat if ip != 0]
+        pages = []
+        for ip in indirect:
+            ibuf = _read_page(path, ip, page_size)
+            for v in struct.unpack(f'<{page_size // 4}I', ibuf):
+                if v == 0:
+                    break
+                pages.append(v)
+    else:
+        raise WriteError(f'fat_level {fat_level} не поддерживается (0/1)')
     data = b''.join(_read_page(path, p, page_size) for p in pages)
-    return pages, data[:length]
+    return fat_level, pages, indirect, data[:length]
 
 
 def _write_object_header(path: Path, header_page: int, pages: list[int],
-                         length: int, page_size: int = PAGE_SIZE) -> None:
-    """Запись заголовка объекта: сигнатура, fat_level 0, длина, FAT."""
+                         length: int, fat_level: int = 0,
+                         page_size: int = PAGE_SIZE) -> None:
+    """Запись заголовка объекта: сигнатура, fat_level, длина, FAT.
+
+    fat_level 0 — FAT из номеров страниц данных; fat_level 1 — FAT из
+    номеров indirect-страниц (каждая содержит номера страниц данных).
+    """
     header = bytearray(page_size)
     header[0:2] = OBJ_SIG
-    struct.pack_into('<H', header, 2, 0)           # fat_level
+    struct.pack_into('<H', header, 2, fat_level)
     struct.pack_into('<Q', header, 16, length)
-    for j, p in enumerate(pages):
-        struct.pack_into('<I', header, PAGE_HEADER_SIZE + 4 * j, p)
+    if fat_level == 0 or fat_level == 1:
+        for j, p in enumerate(pages):
+            struct.pack_into('<I', header, PAGE_HEADER_SIZE + 4 * j, p)
+    else:
+        raise WriteError(f'fat_level {fat_level} не поддерживается (0/1)')
     _write_page(path, header_page, bytes(header), page_size)
 
 
@@ -108,12 +144,22 @@ def _set_total_pages(path: Path, total: int, page_size: int = PAGE_SIZE) -> None
 # ---------------------------------------------------------------------------
 
 
+def _ensure_not_locked(path: Path) -> None:
+    """Отказ, если база открыта в 1С (1Cv8.1CL) или используется (1Cv8tmp*)."""
+    d = path.parent
+    if (d / '1Cv8.1CL').exists():
+        raise LockError(f'база открыта (1Cv8.1CL) — запись запрещена: {path}')
+    if list(d.glob('1Cv8tmp*')):
+        raise LockError(f'база используется (1Cv8tmp*) — запись запрещена: {path}')
+
+
 def append_records(path: str | Path, table_name: str, rows: bytes) -> int:
     """Добавление строк в конец таблицы; возвращает новое число строк.
 
-    Дописывает страницы данных в конец файла, обновляет FAT level 0 и длину
-    объекта таблицы, total_pages в заголовке. Таблица без объекта данных
-    (data_page == 0) не поддерживается — WriteError.
+    Дописывает страницы данных в конец файла, обновляет FAT (level 0/1)
+    и длину объекта таблицы, total_pages в заголовке. Таблица без объекта
+    данных (data_page == 0) не поддерживается — WriteError. Открытая ИБ
+    (1Cv8.1CL/1Cv8tmp*) — LockError. Индексы не пересобираются — warning.
     """
     p = Path(path)
     with Database1CD(p) as db:
@@ -127,20 +173,47 @@ def append_records(path: str | Path, table_name: str, rows: bytes) -> int:
         if len(rows) % row_length:
             raise WriteError(f'длина строк {len(rows)} не кратна '
                              f'row_length={row_length}')
+        if t.index_page:
+            warnings.warn(f'таблица {table_name!r} имеет индексы (index_page='
+                          f'{t.index_page}) — индексы не пересобираются',
+                          UserWarning, stacklevel=2)
 
+    _ensure_not_locked(p)
     total = _total_pages(p)
-    pages, data = _read_object(p, t.data_page)
+    fat_level, pages, _, data = _read_object_full(p, t.data_page)
     new_data = data + rows
     n_pages = (len(new_data) + PAGE_SIZE - 1) // PAGE_SIZE
     need = n_pages - len(pages)
     if need < 0:
         raise WriteError('нельзя уменьшить таблицу')
     new_pages = pages + list(range(total, total + need))
+    total += need
     # перезаписываем все страницы объекта: последняя страница могла быть
     # неполной, и новые байты могли частично влезть в неё (need == 0)
     for j in range(n_pages):
         _write_page(p, new_pages[j],
                     new_data[j * PAGE_SIZE:(j + 1) * PAGE_SIZE])
-    _write_object_header(p, t.data_page, new_pages, len(new_data))
-    _set_total_pages(p, total + need)
+    if fat_level == 0:
+        _write_object_header(p, t.data_page, new_pages, len(new_data))
+    elif fat_level == 1:
+        # indirect-страницы: page_size/4 номеров данных на страницу-указатель
+        per = PAGE_SIZE // 4
+        n_ind = (n_pages + per - 1) // per
+        entries = (PAGE_SIZE - PAGE_HEADER_SIZE) // 4
+        if n_ind > entries:
+            raise WriteError(f'нужен fat_level 2 ({n_ind} indirect > {entries} '
+                             f'слотов): таблица {table_name!r} слишком большая')
+        new_ind: list[int] = []
+        for k in range(n_ind):
+            ibuf = bytearray(PAGE_SIZE)
+            for j, pg in enumerate(new_pages[k * per:(k + 1) * per]):
+                struct.pack_into('<I', ibuf, 4 * j, pg)
+            _write_page(p, total, bytes(ibuf))
+            new_ind.append(total)
+            total += 1
+        _write_object_header(p, t.data_page, new_ind, len(new_data),
+                             fat_level=1)
+    else:
+        raise WriteError(f'fat_level {fat_level} не поддерживается (0/1)')
+    _set_total_pages(p, total)
     return len(new_data) // row_length

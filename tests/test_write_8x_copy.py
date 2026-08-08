@@ -22,6 +22,37 @@ TABLE = '_REFERENCE3'
 
 @REQUIRED
 @pytest.mark.integration
+def test_append_to_fat_level1_on_copy(tmp_path: Path):
+    """Копия 8.1 → append в fat_level 1 таблицу (>8 МБ) → чтение без потерь."""
+    import struct
+
+    with Database1CD(BASE_81) as db:
+        fl1 = [n for n, t in db.tables.items()
+               if t.data_page and struct.unpack(
+                   '<H', db.read_page(t.data_page)[2:4])[0] == 1]
+    if not fl1:
+        pytest.skip('в базе 8.1 нет таблиц с fat_level 1')
+    tab = fl1[0]
+
+    cp = copy_1cd(BASE_81, tmp_path / 'copy_fl1.1CD')
+    with Database1CD(BASE_81) as db:
+        rl = db.tables[tab].row_length
+        rows_before = db.table_stats(tab)[0]
+
+    add_rows = b'\x00' * rl * 2
+    n = append_records(cp, tab, add_rows)
+    assert n == rows_before + 2
+    with Database1CD(cp) as db:
+        assert db.table_stats(tab)[0] == rows_before + 2
+        assert db.tables[tab].row_length == rl
+    # структура объекта осталась fat_level 1
+    with Database1CD(cp) as db:
+        dp = db.tables[tab].data_page
+        assert struct.unpack('<H', db.read_page(dp)[2:4])[0] == 1
+
+
+@REQUIRED
+@pytest.mark.integration
 def test_append_on_copy_of_real_base(tmp_path: Path):
     """Копия 8.1 → append 2 строк → парсер читает, размеры сходятся."""
     cp = copy_1cd(BASE_81, tmp_path / 'copy.1CD')
