@@ -117,6 +117,10 @@ def test_table_sizes_tool(tmp_path: Path):
     assert d2['count'] == 1
     d3 = json.loads(table_sizes(str(tmp_path), tables='NOPE'))
     assert d3['count'] == 0
+    # format='xlsx' — файл-отчёт
+    out = tmp_path / 'sizes.xlsx'
+    rx = json.loads(table_sizes(str(tmp_path), format='xlsx', out_file=str(out)))
+    assert rx['ok'] and out.is_file() and out.stat().st_size > 0
 
 
 def test_timings_histogram():
@@ -198,19 +202,30 @@ def test_compare_structures_tool(tmp_path: Path):
     assert res['ok']
     assert res['counts']['only_target'] == 0  # объекты одинаковы (имя/kind)
     assert res['counts']['mismatch'] == 0
+    # format='xlsx' — файл-отчёт
+    out = tmp_path / 'struct.xlsx'
+    rx = json.loads(compare_structures(str(tmp_path / 'src'),
+                                       str(tmp_path / 'tgt'),
+                                       format='xlsx', out_file=str(out)))
+    assert rx['ok'] and out.is_file() and out.stat().st_size > 0
+    # xlsx без out_file — ошибка
+    re_ = json.loads(compare_structures(str(tmp_path / 'src'),
+                                        str(tmp_path / 'tgt'),
+                                        format='xlsx'))
+    assert not re_['ok']
 
 
 def test_query_table_tool(tmp_path: Path):
-    """C3: консоль запросов — фильтрация записей по условиям."""
+    """C3: консоль запросов — фильтрация записей по условиям (query_sql)."""
     from onec_converter.fake_1cd import build_fake_1cd
-    from onec_converter.mcp_server import query_table
+    from onec_converter.mcp_server import query_sql
     from tests.test_source_8x_units import _config_tables, ref_rows
 
     tables = _config_tables()
     tables[2].rows = ref_rows()
     (tmp_path / '1Cv8.1CD').write_bytes(build_fake_1cd(tables))
-    res = json.loads(query_table(str(tmp_path), '_REFERENCE3',
-                                 filters='_DESCRIPTION=Тест один'))
+    res = json.loads(query_sql(str(tmp_path), '_REFERENCE3',
+                               where='_DESCRIPTION=Тест один'))
     assert res['ok']
     assert res['count'] >= 1
     assert all(r['_DESCRIPTION'] == 'Тест один' for r in res['rows'])
@@ -250,11 +265,11 @@ def test_playbook_sequence():
     for tool, nxt in PLAYBOOK_NEXT.items():
         assert nxt and tool, tool
     # next вшивается в JSON-ответы (на синтетике/или skip при отсутствии базы)
-    from onec_converter.mcp_server import query_table
+    from onec_converter.mcp_server import query_sql
     base = _Path('1C_8.1/1Cv8.1CD')
     if not base.is_file():
         pytest.skip('реальная база 8.1 отсутствует — проверка next пропущена')
-    res = _json.loads(query_table('1C_8.1', '_REFERENCE3', '_CODE=00001', 1))
+    res = _json.loads(query_sql('1C_8.1', '_REFERENCE3', where='_CODE=00001', limit=1))
     assert 'next' in res and res['ok']
 
 

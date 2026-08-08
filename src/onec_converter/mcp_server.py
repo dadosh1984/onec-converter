@@ -29,7 +29,6 @@ from .cache import Cache, file_key
 from .inspect_target import ProjectBinding, inspect_target_from_http
 from .intermediate import OBJ_TYPE, save_json_batch
 from .mapping import build_prompt, validate_rules
-from .source_8x_file import decode_field
 from .terminal import now_ms, tool_error, tool_finished, tool_started, tool_summary
 from .timings import GLOBAL as GLOBAL_TIMINGS
 from .validate import validate_batch
@@ -60,7 +59,7 @@ PLAYBOOK: list[dict[str, str]] = [
      'goal': 'Структура приёмника (через HTTP-расширение 8.3)'},
     {'step': '9', 'command': 'step_map(meta_source, meta_target, rules)',
      'goal': 'Валидация TOON-правил маппинга + промпт для LLM'},
-    {'step': '10', 'command': 'query_table(source_dir, table, filters, limit)',
+    {'step': '10', 'command': 'query_sql(source_dir, table, where, limit)',
      'goal': 'Выборочная проверка данных (пример записи, контроль условий)'},
     {'step': '11', 'command': 'step_extract(out_file, objects="")',
      'goal': 'Извлечение данных источника в промежуточный JSON; objects — '
@@ -128,7 +127,7 @@ PLAYBOOK_NEXT: dict[str, str] = {
     'compare_structures': 'step_init(project_dir, source_ib_id, target_ib_id, '
                           "source_dir, source_encoding='cp866')",
     'dump_metadata': 'compare_structures(source_dir, target_dir)',
-    'query_table': 'step_extract(out_file, objects) — извлечение данных в intermediate JSON; objects — фильтр разделов',
+    'query_sql': 'step_extract(out_file, objects) — извлечение данных в intermediate JSON; objects — фильтр разделов',
 }
 
 
@@ -320,12 +319,14 @@ def tools() -> list[dict[str, Any]]:
     return PipelineState(Path('.')).tools()
 
 
-@visible_tool('table_sizes', 'Размеры таблиц базы 1CD (идея A2: метрики 1C_PrometheusExporter)')
-def table_sizes(source_dir: str, tables: str = '') -> str:
+@visible_tool('table_sizes', 'Размеры таблиц базы 1CD: JSON или XLSX-отчёт (идея A2: метрики 1C_PrometheusExporter)')
+def table_sizes(source_dir: str, tables: str = '', format: str = 'json',
+                out_file: str = '', top_n: int = 50) -> str:
     """Размеры таблиц базы 1CD (идея A2: метрики 1C_PrometheusExporter).
 
     source_dir — каталог с 1Cv8.1CD; tables — подстрока фильтра по имени
-    (пусто = все таблицы). Возвращает {name: {rows, bytes}} — число строк
+    (пусто = все таблицы); format — 'json' (по умолчанию) или 'xlsx'
+    (отчёт в out_file). JSON: {name: {rows, bytes}} — число строк
     и объём данных каждой таблицы для оценки объёма переноса.
     """
     from .source_8x_file import Database1CD
@@ -341,20 +342,32 @@ def table_sizes(source_dir: str, tables: str = '') -> str:
             names = [n for n in names if tables.lower() in n.lower()]
         out = {n: dict(zip(('rows', 'bytes'), db.table_stats(n)))
                for n in names}
+    if format == 'xlsx':
+        if not out_file:
+            return json.dumps({'ok': False,
+                               'error': 'xlsx: укажите out_file'},
+                              ensure_ascii=False)
+        from .xlsx_report import build_sizes_report
+        sizes = [(n, out[n]['rows'], out[n]['bytes']) for n in names]
+        outp = Path(out_file)
+        outp.parent.mkdir(parents=True, exist_ok=True)
+        build_sizes_report(sizes, outp, top_n=top_n)
+        return json.dumps({'ok': True, 'path': str(outp),
+                           'tables': len(sizes)}, ensure_ascii=False)
     return json.dumps({'ok': True, 'count': len(out), 'tables': out},
                       ensure_ascii=False)
 
 
-@visible_tool('structure_report', 'XLSX-отчёт структуры: diff двух баз (Фаза 8)')
-def structure_report(source_dir: str, target_dir: str, out_file: str) -> str:
-    """XLSX-отчёт структуры двух баз 1CD (Фаза 8).
+@visible_tool('compare_structures', 'Diff-отчёт структур двух баз 1CD: JSON или XLSX (идея C2: RDT1C)')
+def compare_structures(source_dir: str, target_dir: str, format: str = 'json',
+                       out_file: str = '') -> str:
+    """Diff-отчёт структур двух баз 1CD (идея C2: RDT1C анализ конфигураций).
 
-    Листы «Только в источнике» / «Только в приёмнике» / «Расхождения типов»
-    (объект, поле, тип_источника, тип_приёмника). Возвращает путь к файлу
-    и сводку counts (как в compare_structures).
+    Объекты только в источнике / только в приёмнике / общие (с совпадением
+    типов полей). format — 'json' (по умолчанию) или 'xlsx' (листы «Только
+    в источнике»/«Только в приёмнике»/«Расхождения типов», нужен out_file).
     """
     from .source_8x_file import read_metadata
-    from .xlsx_report import build_structure_report
 
     src = Path(source_dir) / '1Cv8.1CD'
     tgt = Path(target_dir) / '1Cv8.1CD'
@@ -364,33 +377,22 @@ def structure_report(source_dir: str, target_dir: str, out_file: str) -> str:
     ms = read_metadata(src)
     mt = read_metadata(tgt)
     d = diff_structures(ms, mt)
-    out = Path(out_file)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    build_structure_report(d, out)
-    return json.dumps({'ok': True, 'path': str(out), 'counts': d['counts']},
-                      ensure_ascii=False)
-
-
-@visible_tool('table_sizes_report', 'XLSX-отчёт размеров таблиц (Фаза 8)')
-def table_sizes_report(source_dir: str, out_file: str, top_n: int = 50) -> str:
-    """XLSX-отчёт размеров таблиц: лист «Таблицы», сортировка по байтам, топ-N.
-
-    Размеры берутся из Database1CD.table_stats — совпадают с table_sizes.
-    """
-    from .source_8x_file import Database1CD
-    from .xlsx_report import build_sizes_report
-
-    cd = Path(source_dir) / '1Cv8.1CD'
-    if not cd.is_file():
-        return json.dumps({'ok': False,
-                           'error': f'нет 1Cv8.1CD в {source_dir}'},
+    if format == 'xlsx':
+        if not out_file:
+            return json.dumps({'ok': False,
+                               'error': 'xlsx: укажите out_file'},
+                              ensure_ascii=False)
+        from .xlsx_report import build_structure_report
+        outp = Path(out_file)
+        outp.parent.mkdir(parents=True, exist_ok=True)
+        build_structure_report(d, outp)
+        return json.dumps({'ok': True, 'path': str(outp), 'counts': d['counts']},
                           ensure_ascii=False)
-    with Database1CD(cd) as db:
-        sizes = [(n, *db.table_stats(n)) for n in db.tables]
-    out = Path(out_file)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    build_sizes_report(sizes, out, top_n=top_n)
-    return json.dumps({'ok': True, 'path': str(out), 'tables': len(sizes)},
+    return json.dumps({'ok': True,
+                       'only_source': d['only_source'][:100],
+                       'only_target': d['only_target'][:100],
+                       'type_mismatch': d['type_mismatch'][:100],
+                       'counts': d['counts']},
                       ensure_ascii=False)
 
 
@@ -432,31 +434,6 @@ def search_schema(source_dir: str, query: str) -> str:
                       ensure_ascii=False)
 
 
-@visible_tool('compare_structures', 'Diff-отчёт структур двух баз 1CD (идея C2: RDT1C)')
-def compare_structures(source_dir: str, target_dir: str) -> str:
-    """Diff-отчёт структур двух баз 1CD (идея C2: RDT1C анализ конфигураций).
-
-    Объекты только в источнике / только в приёмнике / общие (с совпадением
-    типов полей). Полезен для плана конвертации перед переносом.
-    """
-    from .source_8x_file import read_metadata
-
-    src = Path(source_dir) / '1Cv8.1CD'
-    tgt = Path(target_dir) / '1Cv8.1CD'
-    if not src.is_file() or not tgt.is_file():
-        return json.dumps({'ok': False, 'error': 'нет 1Cv8.1CD в source_dir/target_dir'},
-                          ensure_ascii=False)
-    ms = read_metadata(src)
-    mt = read_metadata(tgt)
-    d = diff_structures(ms, mt)
-    return json.dumps({'ok': True,
-                       'only_source': d['only_source'][:100],
-                       'only_target': d['only_target'][:100],
-                       'type_mismatch': d['type_mismatch'][:100],
-                       'counts': d['counts']},
-                      ensure_ascii=False)
-
-
 def diff_structures(ms: dict[str, Any], mt: dict[str, Any]) -> dict[str, Any]:
     """Diff двух метаданных (структура): only_source/only_target/type_mismatch.
 
@@ -484,62 +461,6 @@ def diff_structures(ms: dict[str, Any], mt: dict[str, Any]) -> dict[str, Any]:
             'counts': {'only_source': len(only_src),
                        'only_target': len(only_tgt),
                        'mismatch': len(diff_types)}}
-
-
-@visible_tool('query_table', 'Консоль запросов: выборка записей таблицы 1CD с фильтрами (идея C3)')
-def query_table(source_dir: str, table: str, filters: str = '',
-                limit: int = 100) -> str:
-    """Консоль запросов: выборка записей таблицы 1CD с фильтрами (идея C3).
-
-    filters — строка вида "Поле1=знач1; Поле2>10" (операторы =, !=, >, <, >=, <=;
-    сравнение строк — точное, чисел/дат — по значению). Возвращает до limit
-    записей (по умолчанию 100).
-    """
-    from .source_8x_file import Database1CD
-
-    cd = Path(source_dir) / '1Cv8.1CD'
-    if not cd.is_file():
-        return json.dumps({'ok': False, 'error': f'нет 1Cv8.1CD в {source_dir}'},
-                          ensure_ascii=False)
-    conds: list[tuple[str, str, Any]] = []
-    for part in [p for p in filters.split(';') if p.strip()]:
-        for op in ('>=', '<=', '!=', '=', '>', '<'):
-            if op in part:
-                fname, _, raw = part.partition(op)
-                conds.append((fname.strip(), op, raw.strip()))
-                break
-    with Database1CD(cd) as db:
-        if table not in db.tables:
-            return json.dumps({'ok': False, 'error': f'таблица не найдена: {table}'},
-                              ensure_ascii=False)
-        t = db.tables[table]
-        out = []
-        for row in db.table_rows(t):
-            rec = {fn: decode_field(fd, row[fd.offset:fd.offset + fd.size])
-                   for fn, fd in t.fields.items()}
-            ok = True
-            for fname, op, expected in conds:
-                if fname not in rec:
-                    ok = False
-                    break
-                val = rec[fname]
-                try:
-                    exp_num = float(expected)
-                    val_num = float(val)
-                    cmp: tuple[Any, Any] = (val_num, exp_num)
-                except (ValueError, TypeError):
-                    cmp = (str(val), expected)
-                if op == '=' and cmp[0] != cmp[1] or op == '!=' and cmp[0] == cmp[1] or op == '>' and not cmp[0] > cmp[1] or op == '<' and not cmp[0] < cmp[1] or op == '>=' and not cmp[0] >= cmp[1] or op == '<=' and not cmp[0] <= cmp[1]:
-                    ok = False
-                if not ok:
-                    break
-            if ok:
-                out.append(rec)
-                if len(out) >= limit:
-                    break
-    return json.dumps({'ok': True, 'table': table, 'filters': filters,
-                       'count': len(out), 'rows': out}, ensure_ascii=False,
-                      default=str)
 
 
 @visible_tool('query_sql', 'Консоль запросов конфигурации: SQL-подобная выборка (Фаза 11, E1)')

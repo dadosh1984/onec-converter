@@ -34,7 +34,7 @@
 | 7 | `step_inspect_source()` | Метаданные источника |
 | 8 | `step_inspect_target(target_metadata)` | Структура приёмника (HTTP-расширение 8.3) |
 | 9 | `step_map(meta_source, meta_target, rules)` | Валидация TOON-правил + промпт LLM |
-| 10 | `query_table(source_dir, table, filters, limit)` | Выборочная проверка данных |
+| 10 | `query_sql(source_dir, table, where, limit)` | Выборочная проверка данных |
 | 11 | `step_extract(out_file)` | Извлечение данных в intermediate JSON |
 | 12 | `step_prevalidate()` | Контроль количества/ссылок/дубликатов |
 | 13 | `transform` → `preview` | Применение правил, dry-run |
@@ -67,7 +67,7 @@
 8. step_inspect_target(metadata_8_3)          → структура приёмника
 9. step_map(meta_src, meta_tgt, rules)        → правила «Сотрудники→Сотрудники»,
                                                 «НачислениеЗарплаты→НачислениеЗарплаты»
-10. query_table('1C_8.1', '_REFERENCE…', '_DESCRIPTION=Иванов')  → контроль записи
+10. query_sql('1C_8.1', '_REFERENCE…', where='_DESCRIPTION=Иванов')  → контроль записи
 11. step_extract('out/intermediate.json')     → данные источника
 12. step_prevalidate()                        → N объектов, ссылки целы, дубликатов нет
 13. transform → preview                       → dry-run на приёмнике

@@ -138,7 +138,7 @@ Bayselonarrend/OpenIntegrations (MCP-тулы наружу).
       объединить `query_table`→`query_sql` (удалить старый), 
       `table_sizes`/`table_sizes_report`→`table_sizes --format json|xlsx`,
       `structure_report`/`compare_structures`→`compare_structures --format json|xlsx`
-      (сократить 15 тулов до ~11, проще агенту; CLI-поверхность не трогаем)
+      (сократить 15 тулов до ~11, проще агенту; CLI-поверхность не трогаем) ✅
 
       (например, `tools()` MCP vs реальные туллы — как `preview`/`verify`)
 

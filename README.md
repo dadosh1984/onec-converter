@@ -240,8 +240,10 @@ npx vitest run              # .ts-сниппеты для Orion shield
 
 **MCP-интерфейс и инфраструктура**
 - `search_schema` — двунаправленный поиск метаданные↔таблицы (1CDBStorageStructureInfo).
-- `compare_structures` — diff-отчёт структур двух баз (RDT1C).
-- `query_table` — консоль запросов с фильтрами `Поле=знач; Поле>10` (RequestConsole9000).
+- `compare_structures` — diff-отчёт структур двух баз (RDT1C), `format=json|xlsx`;
+  `table_sizes` — размеры таблиц, `format=json|xlsx` (объединены с XLSX-отчётами Фазы 29.1).
+- `query_sql` — консоль запросов: SQL-подобная выборка с WHERE-фильтрами
+  `Поле=знач; Поле>10` (RequestConsole9000); `query_table` объединён сюда (Фаза 29.1).
 - `dump_metadata` — экспорт метаданных в YAML/JSON для git-диффов (GitConverter).
 
 ## Сквозной перенос 7.7→8.3 (Фаза 7, `docs/pipeline.md`)
