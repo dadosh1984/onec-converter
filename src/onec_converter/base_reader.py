@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import shutil
 import tempfile
 import zlib
 from dataclasses import dataclass, field
