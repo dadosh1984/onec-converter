@@ -1,0 +1,26 @@
+# Нормализация концовок строк: храним LF, рабочие копии — по ОС.
+# Убирает CRLF-шум (ложные «изменённые» файлы) и конфликты
+# параллельных правок (см. core.autocrlf в git config).
+* text=auto
+
+# Код и тексты — строго LF в репозитории
+*.py text eol=lf
+*.pyi text eol=lf
+*.ts text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.cfg text eol=lf
+*.ini text eol=lf
+*.txt text eol=lf
+*.xlsx binary
+*.1CD binary
+*.dat binary
+*.dt binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.zip binary
