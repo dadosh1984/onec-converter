@@ -134,3 +134,26 @@ def test_target_8_3_dbnames_style():
     # перечисления 8.3 -> _ENUMnn
     assert any(o['kind'] == 'Перечисление' and o['table'].startswith('_ENUM')
                for o in md['objects'])
+
+
+@REQUIRED
+@pytest.mark.integration
+def test_source_8_1_ref_names():
+    """A1: кеш ссылок GUID→наименование на реальной базе (родитель банка)."""
+    with Database1CD(BASE_81) as db:
+        t = db.tables['_REFERENCE3']
+        f = t.fields
+        parent_found = False
+        for row in db.table_rows(t):
+            if row[:1] == b'\x01':
+                continue
+            p = row[f['_PARENTIDRREF'].offset:
+                    f['_PARENTIDRREF'].offset + 16]
+            if p != b'\x00' * 16:
+                name = db.ref_name('_REFERENCE3', p)
+                assert name and 'Банк' in name, f'имя родителя: {name!r}'
+                parent_found = True
+                break
+        assert parent_found, 'нет записей с родителем в Банках'
+        # кеш построен и покрывает справочник
+        assert len(db._ref_table_cache['_REFERENCE3']) >= 1000

@@ -28,8 +28,9 @@ from __future__ import annotations
 import mmap
 import re
 import struct
+import time
 import zlib
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -37,6 +38,7 @@ from typing import Any, Self
 
 from .cache import Cache, file_key
 from .model import ObjectType
+from .timings import Timings
 
 _METADATA_CACHE_INSTANCE: Cache | None = None
 
@@ -364,6 +366,62 @@ class Database1CD:
         self._locale = ''
         self._blob_cache: dict[int, bytes] = {}  # blob_page -> данные blob-таблицы
         self._root_data: bytes | None = None  # данные root-объекта (каталог)
+        self._ref_table_cache: dict[str, dict[bytes, str]] = {}  # таблица -> idrref: имя
+        self._ref_name_cache: dict[tuple[str, bytes], str | None] = {}
+        self._stats_cache: dict[str, tuple[int, int]] = {}  # таблица -> (строки, байты)
+
+    def table_stats(self, table_name: str) -> tuple[int, int]:
+        """Размеры таблицы: (число строк, байт данных) — с кешем.
+
+        Идея A2 (1C_PrometheusExporter): метрики таблиц для оценки объёма
+        переноса. Лениво: данные таблицы читаются один раз и кешируются.
+        """
+        if table_name not in self._stats_cache:
+            t = self.tables[table_name]
+            data = self.read_object(t.data_page) if t.data_page else b''
+            rows = len(data) // t.row_length if t.row_length else 0
+            self._stats_cache[table_name] = (rows, len(data))
+        return self._stats_cache[table_name]
+
+    def ref_name(self, table_name: str, raw16: bytes) -> str | None:
+        """Имя объекта таблицы по сырой ссылке (кеш ссылок GUID→наименование).
+
+        Строит карту `_IDRREF -> имя` для таблицы один раз (лениво) и
+        кеширует результат поиска. Нулевая ссылка -> None без обращения к БД.
+        """
+        if len(raw16) != 16 or raw16 == b'\x00' * 16:
+            return None
+        key = (table_name, raw16)
+        if key in self._ref_name_cache:
+            return self._ref_name_cache[key]
+        table = self._ref_table_cache.get(table_name)
+        if table is None:
+            table = self._build_ref_index(table_name)
+            self._ref_table_cache[table_name] = table
+        name = table.get(raw16)
+        self._ref_name_cache[key] = name
+        return name
+
+    def _build_ref_index(self, table_name: str) -> dict[bytes, str]:
+        """idrref -> имя для таблицы (описание или первое строковое поле)."""
+        t = self.tables[table_name]
+        idr = t.fields.get('_IDRREF')
+        desc = t.fields.get('_DESCRIPTION')
+        name_f: FieldDef | None = desc
+        if name_f is None:
+            name_f = next((f for f in t.fields.values() if f.type in ('NVC', 'NC')), None)
+        if idr is None or name_f is None:
+            return {}
+        out: dict[bytes, str] = {}
+        for row in self.table_rows(t):
+            if row[:1] == b'\x01':
+                continue
+            raw = row[idr.offset:idr.offset + idr.size]
+            if len(raw) == 16 and raw != b'\x00' * 16:
+                nm = decode_field(name_f, row[name_f.offset:name_f.offset + name_f.size])
+                if isinstance(nm, str) and nm:
+                    out[raw] = nm
+        return out
 
     def close(self) -> None:
         if self._mm is not None:
@@ -908,19 +966,25 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
     objects: list[dict[str, Any]] = []
     tables: list[str] = []
     locale = ''
+    timings = Timings()
     with Database1CD(p) as db:
         tables = sorted(db.tables)
         locale = db.locale
+        t0 = time.perf_counter()
         dbnames = db.read_dbnames()
+        timings.record('read_dbnames', (time.perf_counter() - t0) * 1000)
+        t0 = time.perf_counter()
         root = parse_bracket((db.config_get('root') or b'').decode('utf-8'))
         main_guid = str(root[1])
         main = parse_bracket((db.config_get(main_guid) or b'').decode('utf-8'))
+        timings.record('read_config_root', (time.perf_counter() - t0) * 1000)
 
         for class_guid, node in _find_collections(main):
             kind = _COLLECTION_CLASS.get(class_guid)
             if kind is None:
                 continue
             for guid in (str(g) for g in node[2:]):
+                t_obj = time.perf_counter()
                 raw = db.config_get(guid)
                 if raw is None:
                     continue
@@ -955,7 +1019,9 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
                     'guid': guid,
                     'attributes': attrs,
                 })
-    result = {'objects': objects, 'tables': tables, 'locale': locale}
+                timings.record(f'object:{kind}', (time.perf_counter() - t_obj) * 1000)
+    result = {'objects': objects, 'tables': tables, 'locale': locale,
+              'timings': timings.snapshot()}
     cache.put_json(key, 'metadata', result)
     return result
 
@@ -995,18 +1061,31 @@ def _model_type(fdef: FieldDef) -> str:
     return 'unknown'
 
 
-def read_table(path: str | Path, table_name: str) -> Iterator[dict[str, Any]]:
+def read_table(path: str | Path, table_name: str,
+               ref_tables: Mapping[str, str] | None = None) -> Iterator[dict[str, Any]]:
     """Потоковое чтение записей таблицы: имя поля -> декодированное значение.
 
-    Ссылки (RV/B) — GUID строкой; переназначение на естественные ключи — в фазе map.
+    `ref_tables`: {имя_поля: имя_таблицы} — ссылочные поля (RV/B) разрешаются
+    в `{'guid': …, 'name': …}`: имя объекта подставляется из таблицы-цели
+    (кеш ссылок GUID→наименование строится лениво, один раз на таблицу).
+    Без `ref_tables` ссылки отдаются GUID-строкой.
     """
     with Database1CD(path) as db:
         if table_name not in db.tables:
             raise KeyError(f'таблица не найдена: {table_name}')
         table = db.tables[table_name]
         for row in db.table_rows(table):
-            yield {fname: decode_field(fdef, row[fdef.offset:fdef.offset + fdef.size])
-                   for fname, fdef in table.fields.items()}
+            rec: dict[str, Any] = {}
+            for fname, fdef in table.fields.items():
+                raw = row[fdef.offset:fdef.offset + fdef.size]
+                val = decode_field(fdef, raw)
+                if (ref_tables and fname in ref_tables
+                        and fdef.type in ('RV', 'B')):
+                    target = ref_tables[fname]
+                    name = db.ref_name(target, raw) if target in db.tables else None
+                    val = {'guid': val, 'name': name}
+                rec[fname] = val
+            yield rec
 
 
 def read_dbschema(path: str | Path) -> str:

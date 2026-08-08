@@ -25,9 +25,16 @@ class BaseError(Exception):
 
 @dataclass
 class Base77:
-    """Каталог файловой ИБ 7.7 (метаданные + данные)."""
+    """Каталог файловой ИБ 7.7 (метаданные + данные).
+
+    `encoding` — кодировка текстовых полей .dat (идея A4: CP1251→UTF-8
+    middleware): по умолчанию cp866 (стандарт 7.7), для баз в CP1251
+    укажите 'cp1251'. Строки перекодируются при чтении и попадают
+    в промежуточный JSON (UTF-8) без искажений.
+    """
 
     base_dir: Path
+    encoding: str = 'cp866'
     _md: V77Metadata | None = field(default=None, repr=False)
     _reader: V77Reader | None = field(default=None, repr=False)
 
@@ -51,7 +58,7 @@ class Base77:
     @property
     def data(self) -> V77Reader:
         if self._reader is None:
-            self._reader = V77Reader(self.dat_path)
+            self._reader = V77Reader(self.dat_path, encoding=self.encoding)
         return self._reader
 
     @classmethod

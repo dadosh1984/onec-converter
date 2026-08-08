@@ -32,8 +32,9 @@ def make_dat(
     unique_ids: dict[int, int] | None = None,
     constants: list[tuple[int, list[Any]]] | None = None,
     references: dict[int, list[list[Any]]] | None = None,
+    encoding: str = 'cp866',
 ) -> bytes:
-    """Собрать текст 1Cv77.dat и вернуть байты в CP866."""
+    """Собрать текст 1Cv77.dat и вернуть байты в указанной кодировке (по умолчанию CP866)."""
     unique_ids = unique_ids or {1: 0}
     constants = constants or []
     references = references or {}
@@ -58,4 +59,4 @@ def make_dat(
     parts.append('{' + quote('Template Operations') + ',{}},')
     parts.append('{' + quote('Correct Entries') + ',{}}')
     parts.append('}')
-    return ''.join(parts).encode('cp866', errors='replace')
+    return ''.join(parts).encode(encoding, errors='replace')

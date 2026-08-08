@@ -9,6 +9,13 @@ from pathlib import Path
 
 import pytest
 
+from onec_converter.fake_1cd import (
+    FixtureField,
+    FixtureTable,
+    build_fake_1cd,
+    enc_datetime,
+    encode_row,
+)
 from onec_converter.source_8x_file import (
     Database1CD,
     FormatError,
@@ -23,13 +30,6 @@ from onec_converter.source_8x_file import (
     read_metadata,
     read_table,
     to_model,
-)
-from tests.fixtures.gen_1cd import (
-    FixtureField,
-    FixtureTable,
-    build_1cd,
-    enc_datetime,
-    encode_row,
 )
 
 CATALOG_GUID = 'cf4abea6-37b2-11d4-940f-008048da11f9'
@@ -70,7 +70,7 @@ def ref_rows() -> list[bytes]:
 
 def write_ref1cd(tmp_path: Path, tables: list[FixtureTable]) -> Path:
     p = tmp_path / 'base.1cd'
-    p.write_bytes(build_1cd(tables))
+    p.write_bytes(build_fake_1cd(tables))
     return p
 
 
@@ -311,3 +311,69 @@ def test_parse_bracket():
     assert tree[2] == ['1', '2']
     assert tree[3] == ''
     assert parse_bracket('\ufeff{1}') == ['1']
+
+
+def test_fake_1cd_public_api(tmp_path: Path):
+    """A5: публичный генератор мини-1CD — база читается парсером."""
+    from onec_converter.fake_1cd import FixtureField, FixtureTable, build_fake_1cd
+
+    t = FixtureTable(
+        'FakeTable',
+        fields=[
+            FixtureField('_IDRREF', 'B', length=16),
+            FixtureField('_DESCRIPTION', 'NVC', length=10),
+            FixtureField('_VALUE', 'N', length=8, precision=2),
+        ],
+        rows=[encode_row([], {'_DESCRIPTION': 'Тест'})] if False else [],
+    )
+    # encode_row требует поля; соберём строку вручную через encode_row
+    t.rows = [encode_row(t.fields, {'_DESCRIPTION': 'Тест', '_VALUE': 12.5})]
+    p = tmp_path / 'fake.1CD'
+    p.write_bytes(build_fake_1cd([t]))
+    db = Database1CD(p)
+    assert 'FakeTable' in db.tables
+    rows = list(db.table_rows(db.tables['FakeTable']))
+    assert len(rows) == 1
+    assert decode_nvc(rows[0][db.tables['FakeTable'].fields['_DESCRIPTION'].offset:
+                             db.tables['FakeTable'].fields['_DESCRIPTION'].offset
+                             + db.tables['FakeTable'].fields['_DESCRIPTION'].size]) == 'Тест'
+    db.close()
+
+
+def test_read_table_resolve_refs(tmp_path: Path):
+    """A1: кеш ссылок GUID→наименование — RV-поле разрешается в имя."""
+    from onec_converter.fake_1cd import FixtureField, FixtureTable, build_fake_1cd
+
+    guid1 = bytes.fromhex('11111111111111111111111111111111')
+    guid2 = bytes.fromhex('22222222222222222222222222222222')
+    ref_tbl = FixtureTable('_REFERENCE1', fields=[
+        FixtureField('_IDRREF', 'B', length=16),
+        FixtureField('_DESCRIPTION', 'NVC', length=20),
+    ], rows=[
+        encode_row([
+            FixtureField('_IDRREF', 'B', length=16),
+            FixtureField('_DESCRIPTION', 'NVC', length=20),
+        ], {'_IDRREF': guid1, '_DESCRIPTION': 'Банк А'}),
+        encode_row([
+            FixtureField('_IDRREF', 'B', length=16),
+            FixtureField('_DESCRIPTION', 'NVC', length=20),
+        ], {'_IDRREF': guid2, '_DESCRIPTION': 'Банк Б'}),
+    ])
+    doc_tbl = FixtureTable('_DOCUMENT1', fields=[
+        FixtureField('_IDRREF', 'B', length=16),
+        FixtureField('_BANK', 'RV'),
+    ], rows=[
+        encode_row([FixtureField('_IDRREF', 'B', length=16), FixtureField('_BANK', 'RV')],
+                   {'_IDRREF': bytes(16), '_BANK': guid1}),
+        encode_row([FixtureField('_IDRREF', 'B', length=16), FixtureField('_BANK', 'RV')],
+                   {'_IDRREF': bytes(16), '_BANK': b'\x00' * 16}),
+    ])
+    p = tmp_path / 'refs.1CD'
+    p.write_bytes(build_fake_1cd([ref_tbl, doc_tbl]))
+
+    rows = list(read_table(p, '_DOCUMENT1', ref_tables={'_BANK': '_REFERENCE1'}))
+    assert rows[0]['_BANK'] == {'guid': bin_to_guid(guid1), 'name': 'Банк А'}
+    assert rows[1]['_BANK'] == {'guid': bin_to_guid(b'\x00' * 16), 'name': None}
+    # без ref_tables — GUID строкой
+    rows2 = list(read_table(p, '_DOCUMENT1'))
+    assert rows2[0]['_BANK'] == bin_to_guid(guid1)

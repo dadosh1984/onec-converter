@@ -1,4 +1,7 @@
-"""Генератор синтетического `1Cv8.1CD` для юнит-тестов парсера.
+"""Публичный генератор синтетического `1Cv8.1CD` (Фаза 6, идея dt-demo-configuration):
+
+    создаёт валидную маленькую файловую базу для unit-тестов без реальных
+    баз (реальные — 2.5 ГБ). Используется также тестами парсера.
 
 Собирает минимальный, но структурно корректный файл:
 - заголовок (1CDBMSV8, 8.3.8.0, страницы 8192);
@@ -15,6 +18,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 PAGE = 8192
@@ -143,7 +147,7 @@ def _table_desc(table: FixtureTable, files: tuple[int, int, int]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def build_1cd(tables: list[FixtureTable], locale: str = 'ru_RU') -> bytes:
+def build_fake_1cd(tables: list[FixtureTable], locale: str = 'ru_RU') -> bytes:
     # ---- проход 1: раскладка root-объекта (описания с заглушками Files) ----
     desc_texts: list[str] = [_table_desc(t, (0, 0, 0)) for t in tables]
     desc_offsets: list[int] = []
@@ -233,7 +237,7 @@ def build_1cd(tables: list[FixtureTable], locale: str = 'ru_RU') -> bytes:
     pages: dict[int, bytes] = {1: b'\x00' * PAGE}
     pages[2] = object_pages(2, root_data_pages, root_len)
     for j, p in enumerate(root_data_pages):
-        pages[p] = root_buf[j * PAGE:(j + 1) * PAGE]
+        pages[p] = bytes(root_buf[j * PAGE:(j + 1) * PAGE])
     for i, t in enumerate(tables):
         if i in data_pages:
             dp = data_pages[i]
@@ -267,8 +271,9 @@ def build_1cd(tables: list[FixtureTable], locale: str = 'ru_RU') -> bytes:
     return bytes(out)
 
 
-def write_1cd(path, tables: list[FixtureTable], locale: str = 'ru_RU') -> bytes:
-    data = build_1cd(tables, locale)
+def write_fake_1cd(path: str | Path, tables: list[FixtureTable],
+                   locale: str = 'ru_RU') -> bytes:
+    data = build_fake_1cd(tables, locale)
     with open(path, 'wb') as f:
         f.write(data)
     return data

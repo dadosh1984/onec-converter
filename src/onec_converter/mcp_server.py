@@ -21,6 +21,8 @@ from .cache import Cache, file_key
 from .inspect_target import ProjectBinding, inspect_target_from_http
 from .intermediate import OBJ_TYPE, save_json_batch
 from .mapping import build_prompt, validate_rules
+from .source_8x_file import decode_field
+from .timings import GLOBAL as GLOBAL_TIMINGS
 from .validate import validate_batch
 
 mcp = FastMCP('onec-converter')
@@ -46,10 +48,14 @@ class PipelineState:
         self.last_step = step
 
     def step_init(self, project_dir: str, source_ib_id: str, target_ib_id: str,
-                  source_dir: str) -> dict[str, Any]:
+                  source_dir: str, source_encoding: str = 'cp866') -> dict[str, Any]:
+        """
+        source_encoding — кодировка .dat 7.7 (A4): 'cp866' (по умолчанию)
+        или 'cp1251'; строки перекодируются в UTF-8 в промежуточном формате.
+        """
         self.project_dir = Path(project_dir)
         self.binding = ProjectBinding.create(self.project_dir, source_ib_id, target_ib_id)
-        self.source = Base77(Path(source_dir))
+        self.source = Base77(Path(source_dir), encoding=source_encoding)
         self._mark('init')
         return {'ok': True, 'binding': {'source': source_ib_id, 'target': target_ib_id}}
 
@@ -172,12 +178,209 @@ class PipelineState:
 
 @mcp.tool()
 def pipeline_status() -> str:
-    """Статус пайплайна переноса: коннекторы, кеш, последний шаг (точка входа для LLM)."""
+    """Статус пайплайна переноса: коннекторы, кеш, последний шаг, метрики (точка входа для LLM)."""
     state = PipelineState(Path('.'))
-    return json.dumps(state.step_status(), ensure_ascii=False)
+    st = state.step_status()
+    st['timings'] = GLOBAL_TIMINGS.snapshot()
+    return json.dumps(st, ensure_ascii=False)
 
 
 @mcp.tool()
 def tools() -> list[dict[str, Any]]:
     """Список тулов пайплайна (точка входа для LLM-агента)."""
     return PipelineState(Path('.')).tools()
+
+
+@mcp.tool()
+def table_sizes(source_dir: str, tables: str = '') -> str:
+    """Размеры таблиц базы 1CD (идея A2: метрики 1C_PrometheusExporter).
+
+    source_dir — каталог с 1Cv8.1CD; tables — подстрока фильтра по имени
+    (пусто = все таблицы). Возвращает {name: {rows, bytes}} — число строк
+    и объём данных каждой таблицы для оценки объёма переноса.
+    """
+    from .source_8x_file import Database1CD
+
+    cd = Path(source_dir) / '1Cv8.1CD'
+    if not cd.is_file():
+        return json.dumps({'ok': False,
+                           'error': f'нет 1Cv8.1CD в {source_dir}'},
+                          ensure_ascii=False)
+    with Database1CD(cd) as db:
+        names = sorted(db.tables)
+        if tables:
+            names = [n for n in names if tables.lower() in n.lower()]
+        out = {n: dict(zip(('rows', 'bytes'), db.table_stats(n)))
+               for n in names}
+    return json.dumps({'ok': True, 'count': len(out), 'tables': out},
+                      ensure_ascii=False)
+
+
+@mcp.tool()
+def search_schema(source_dir: str, query: str) -> str:
+    """Двунаправленный поиск метаданные↔таблицы (идея C1: 1CDBStorageStructureInfo).
+
+    Ищет по имени/синониму объекта («Номенклатура»), по имени таблицы
+    («REFERENCE106»/_Reference74) и по именам полей. Возвращает совпадения
+    с типами и привязкой к таблице.
+    """
+    from .source_8x_file import read_metadata
+
+    cd = Path(source_dir) / '1Cv8.1CD'
+    if not cd.is_file():
+        return json.dumps({'ok': False, 'error': f'нет 1Cv8.1CD в {source_dir}'},
+                          ensure_ascii=False)
+    md = read_metadata(cd)
+    q = query.strip().lower()
+    hits = []
+    for o in md['objects']:
+        name = o['name'] or ''
+        syn = o.get('synonym') or ''
+        table = o['table'] or ''
+        if q in name.lower() or q in syn.lower() or q in table.lower():
+            hits.append({'kind': o['kind'], 'name': name, 'synonym': syn,
+                         'table': table, 'ref_num': o['ref_num']})
+    # поиск по именам физических полей (FldNNN/системные)
+    fields = []
+    if not hits:
+        for o in md['objects']:
+            for a in o['attributes']:
+                if q in a['name'].lower() or q in (a['field'] or '').lower():
+                    fields.append({'object': f"{o['kind']}.{o['name']}",
+                                   'field': a['field'], 'attr': a['name'],
+                                   'type': a['type']})
+    return json.dumps({'ok': True, 'query': query,
+                       'objects': hits[:50], 'fields': fields[:50]},
+                      ensure_ascii=False)
+
+
+@mcp.tool()
+def compare_structures(source_dir: str, target_dir: str) -> str:
+    """Diff-отчёт структур двух баз 1CD (идея C2: RDT1C анализ конфигураций).
+
+    Объекты только в источнике / только в приёмнике / общие (с совпадением
+    типов полей). Полезен для плана конвертации перед переносом.
+    """
+    from .source_8x_file import read_metadata
+
+    src = Path(source_dir) / '1Cv8.1CD'
+    tgt = Path(target_dir) / '1Cv8.1CD'
+    if not src.is_file() or not tgt.is_file():
+        return json.dumps({'ok': False, 'error': 'нет 1Cv8.1CD в source_dir/target_dir'},
+                          ensure_ascii=False)
+    ms = read_metadata(src)
+    mt = read_metadata(tgt)
+
+    def key(o: dict[str, Any]) -> str:
+        return f"{o['kind']}.{o['name']}"
+
+    by_src = {key(o): o for o in ms['objects']}
+    by_tgt = {key(o): o for o in mt['objects']}
+    only_src = [k for k in by_src if k not in by_tgt]
+    only_tgt = [k for k in by_tgt if k not in by_src]
+    diff_types = []
+    for k in set(by_src) & set(by_tgt):
+        sa = {a['name']: a['type'] for a in by_src[k]['attributes']}
+        ta = {a['name']: a['type'] for a in by_tgt[k]['attributes']}
+        for attr in set(sa) & set(ta):
+            if sa[attr] != ta[attr]:
+                diff_types.append({'object': k, 'attr': attr,
+                                   'source_type': sa[attr], 'target_type': ta[attr]})
+    return json.dumps({'ok': True,
+                       'only_source': sorted(only_src)[:100],
+                       'only_target': sorted(only_tgt)[:100],
+                       'type_mismatch': diff_types[:100],
+                       'counts': {'only_source': len(only_src),
+                                  'only_target': len(only_tgt),
+                                  'mismatch': len(diff_types)}},
+                      ensure_ascii=False)
+
+
+@mcp.tool()
+def query_table(source_dir: str, table: str, filters: str = '',
+                limit: int = 100) -> str:
+    """Консоль запросов: выборка записей таблицы 1CD с фильтрами (идея C3).
+
+    filters — строка вида "Поле1=знач1; Поле2>10" (операторы =, !=, >, <, >=, <=;
+    сравнение строк — точное, чисел/дат — по значению). Возвращает до limit
+    записей (по умолчанию 100).
+    """
+    from .source_8x_file import Database1CD
+
+    cd = Path(source_dir) / '1Cv8.1CD'
+    if not cd.is_file():
+        return json.dumps({'ok': False, 'error': f'нет 1Cv8.1CD в {source_dir}'},
+                          ensure_ascii=False)
+    conds: list[tuple[str, str, Any]] = []
+    for part in [p for p in filters.split(';') if p.strip()]:
+        for op in ('>=', '<=', '!=', '=', '>', '<'):
+            if op in part:
+                fname, _, raw = part.partition(op)
+                conds.append((fname.strip(), op, raw.strip()))
+                break
+    with Database1CD(cd) as db:
+        if table not in db.tables:
+            return json.dumps({'ok': False, 'error': f'таблица не найдена: {table}'},
+                              ensure_ascii=False)
+        t = db.tables[table]
+        out = []
+        for row in db.table_rows(t):
+            rec = {fn: decode_field(fd, row[fd.offset:fd.offset + fd.size])
+                   for fn, fd in t.fields.items()}
+            ok = True
+            for fname, op, expected in conds:
+                if fname not in rec:
+                    ok = False
+                    break
+                val = rec[fname]
+                try:
+                    exp_num = float(expected)
+                    val_num = float(val)
+                    cmp: tuple[Any, Any] = (val_num, exp_num)
+                except (ValueError, TypeError):
+                    cmp = (str(val), expected)
+                if op == '=' and cmp[0] != cmp[1] or op == '!=' and cmp[0] == cmp[1] or op == '>' and not cmp[0] > cmp[1] or op == '<' and not cmp[0] < cmp[1] or op == '>=' and not cmp[0] >= cmp[1] or op == '<=' and not cmp[0] <= cmp[1]:
+                    ok = False
+                if not ok:
+                    break
+            if ok:
+                out.append(rec)
+                if len(out) >= limit:
+                    break
+    return json.dumps({'ok': True, 'table': table, 'filters': filters,
+                       'count': len(out), 'rows': out}, ensure_ascii=False,
+                      default=str)
+
+
+@mcp.tool()
+def dump_metadata(source_dir: str, out_file: str = '', fmt: str = 'json') -> str:
+    """Дамп метаданных базы в git-дружественный текст (идея D1: GitConverter).
+
+    Структура (объекты, типы, привязка таблиц, поля) записывается в JSON
+    или YAML — файл удобен для ревью изменений конфигурации в git.
+    out_file: путь результата (пусто — только вернуть в ответе).
+    """
+    from .source_8x_file import read_metadata
+
+    cd = Path(source_dir) / '1Cv8.1CD'
+    if not cd.is_file():
+        return json.dumps({'ok': False, 'error': f'нет 1Cv8.1CD в {source_dir}'},
+                          ensure_ascii=False)
+    md = read_metadata(cd)
+    payload = {'source_dir': str(cd), 'objects': md['objects'],
+               'total': len(md['objects'])}
+    if fmt == 'yaml':
+        import yaml  # type: ignore[import-untyped]
+
+        text = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
+    else:
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+    written = ''
+    if out_file:
+        p = Path(out_file)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding='utf-8')
+        written = str(p)
+    return json.dumps({'ok': True, 'fmt': fmt, 'objects': len(md['objects']),
+                       'out_file': written, 'text': text[:2000]},
+                      ensure_ascii=False)

@@ -16,11 +16,51 @@ LLM получает метаданные источника и приёмник
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
+
+from .type_priority import type_rank
 
 SCHEMA_VERSION = 1
 
 RULES_DEFAULT: dict[str, Any] = {'version': SCHEMA_VERSION, 'objects': [], 'enums': {}}
+
+
+class MappingError(Exception):
+    """Ошибка работы с правилами маппинга."""
+
+
+def load_rules(path: str | Path) -> dict[str, Any]:
+    """Загрузка JSON-правил TOON из файла с валидацией (идея B2).
+
+    Таблица соответствий «объект/реквизит источника → приёмника» хранится
+    как JSON (аналог TOON Конвертации данных 3) — настраивается без
+    изменения кода. Ошибки схемы -> MappingError.
+    """
+    p = Path(path)
+    try:
+        data = json.loads(p.read_text(encoding='utf-8'))
+    except OSError as exc:
+        raise MappingError(f'не удалось прочитать {p}: {exc}') from exc
+    except json.JSONDecodeError as exc:
+        raise MappingError(f'битый JSON в {p}: {exc}') from exc
+    if not isinstance(data, dict):
+        raise MappingError(f'{p}: ожидался объект JSON')
+    errors = validate_rules(data)
+    if errors:
+        raise MappingError(f'{p}: правила невалидны:\n' + '\n'.join(errors))
+    return data
+
+
+def save_rules(path: str | Path, rules: dict[str, Any]) -> Path:
+    """Сохранение правил TOON в JSON (UTF-8, отступы для git-диффов)."""
+    errors = validate_rules(rules)
+    if errors:
+        raise MappingError('правила невалидны:\n' + '\n'.join(errors))
+    p = Path(path)
+    p.write_text(json.dumps(rules, ensure_ascii=False, indent=2) + '\n',
+                 encoding='utf-8')
+    return p
 
 
 def build_prompt(meta_source: dict[str, Any], meta_target: dict[str, Any]) -> str:
@@ -37,7 +77,12 @@ def build_prompt(meta_source: dict[str, Any], meta_target: dict[str, Any]) -> st
 
 
 def validate_rules(rules: dict[str, Any]) -> list[str]:
-    """Проверка правил; возвращает список ошибок (пусто — правила валидны)."""
+    """Проверка правил; возвращает список ошибок (пусто — правила валидны).
+
+    Если правило задаёт `type` (целевой тип) — он проверяется на соответствие
+    приоритету типов (TYPE_PRIORITY): для составного/неизвестного набора
+    выбирается детерминированный тип.
+    """
     errors: list[str] = []
     if rules.get('version') != SCHEMA_VERSION:
         errors.append(f'неверная версия схемы: {rules.get("version")}')
@@ -57,4 +102,8 @@ def validate_rules(rules: dict[str, Any]) -> list[str]:
         seen.add(pair)
         if not isinstance(rule.get('attributes'), dict):
             errors.append(f'object[{i}]: attributes должен быть объектом')
+        ttype = rule.get('type')
+        if ttype is not None and type_rank(str(ttype)) == 5:
+            errors.append(f'object[{i}]: неизвестный целевой тип {ttype!r} '
+                          f'(ожидаются: string, number, date, bool, ref)')
     return errors

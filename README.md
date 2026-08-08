@@ -89,6 +89,28 @@ mypy src
 оптимизаций: ленивая распаковка конфигурации, индекс blob-смещений,
 частичный разбор скобкофайлов).
 
+## Фаза 6 — внедрённые идеи (см. `docs/ideas.md`)
+
+Реализовано 12 идей внешних 1С-проектов (авторский код, только идея):
+
+**Парсер и данные**
+- `fake_1cd.py` — генератор синтетической мини-1CD для unit-тестов (dt-demo-configuration).
+- `ref_name()`/`read_table(ref_tables=...)` — кеш ссылок GUID→наименование (tool1cd).
+- MCP-тул `table_sizes` — размеры таблиц (1C_PrometheusExporter); `timings.py` — журнал метрик.
+- `Base77(encoding=...)` — CP1251→UTF-8 middleware для 7.7 (кодировки 1Cv77.dat).
+
+**Конвертация**
+- `type_priority.py` — TYPE_PRIORITY Str<Num<Date<Bool<Ref (1cdtools); проверка в `validate_rules`.
+- TOON-правила: `load_rules`/`save_rules` в `mapping.py` (Конвертация данных 3).
+- `kd3_import.py` — импорт XML правил обмена КД3 → JSON (gitrules).
+- `anonymizer.py` — маскировка PII: ФИО/телефоны/ИНН, режимы mask/hash.
+
+**MCP-интерфейс и инфраструктура**
+- `search_schema` — двунаправленный поиск метаданные↔таблицы (1CDBStorageStructureInfo).
+- `compare_structures` — diff-отчёт структур двух баз (RDT1C).
+- `query_table` — консоль запросов с фильтрами `Поле=знач; Поле>10` (RequestConsole9000).
+- `dump_metadata` — экспорт метаданных в YAML/JSON для git-диффов (GitConverter).
+
 ## Документация форматов
 - `docs/format-77.md` — текстовый формат ИБ 7.7 (`1Cv77.dat`, `1Cv7.MD`).
 - `docs/format-8x.md` — формат `1Cv8.1CD` (1CD 8.3.8.0), конфигурация, DBSCHEMA.

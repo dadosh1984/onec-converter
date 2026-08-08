@@ -1,0 +1,40 @@
+{
+  "ok": false,
+  "done": 0,
+  "total": 14,
+  "skipped": 0,
+  "pending": [
+    "assumption_1cd_build_fake_1cd_path_tables_rows_1cdbmsv8_root_fat",
+    "assumption_guid_read_table_resolve_refs_true_ref_rv_b_lazy_blob_",
+    "fact_status_table_sizes_unit_1c_8_1_1c_8_3_1c_prometheusexporter",
+    "assumption_timings_histogram_read_metadata_read_table_ms_status_",
+    "fact_cp1251_utf_8_middleware_encoding_cp1251_7_7_utf_8_8_x_unit_",
+    "assumption_type_priority_str_num_date_bool_ref_dbname_priority_5",
+    "assumption_toon_json_transform_py_unit_3_toon",
+    "assumption_3_xml_3_json_toon_unit_xml_otymko_gitrules",
+    "assumption_pii_regexp_anonymize_unit",
+    "assumption_mcp_search_schema_query_reference106_unit_alexkmbk_1c",
+    "assumption_mcp_compare_structures_source_target_xlsx_unit_rdt1c",
+    "assumption_mcp_query_table_table_filters_limit_read_table_field_",
+    "assumption_dump_metadata_path_fmt_yaml_json_git_unit_1c_company_",
+    "assumption_docs_ideas_md_6_readme"
+  ],
+  "missingSnippets": [
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_1cd_build_fake_1cd_path_tables_rows_1cdbmsv8_root_fat.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_guid_read_table_resolve_refs_true_ref_rv_b_lazy_blob_.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/fact_status_table_sizes_unit_1c_8_1_1c_8_3_1c_prometheusexporter.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_timings_histogram_read_metadata_read_table_ms_status_.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/fact_cp1251_utf_8_middleware_encoding_cp1251_7_7_utf_8_8_x_unit_.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_type_priority_str_num_date_bool_ref_dbname_priority_5.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_toon_json_transform_py_unit_3_toon.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_3_xml_3_json_toon_unit_xml_otymko_gitrules.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_pii_regexp_anonymize_unit.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_mcp_search_schema_query_reference106_unit_alexkmbk_1c.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_mcp_compare_structures_source_target_xlsx_unit_rdt1c.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_mcp_query_table_table_filters_limit_read_table_field_.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_dump_metadata_path_fmt_yaml_json_git_unit_1c_company_.ts",
+    "changes/фаза-6-внедрить-идеи/snippets/assumption_docs_ideas_md_6_readme.ts"
+  ],
+  "reportPath": "changes/фаза-6-внедрить-идеи/forge-report.md",
+  "message": "forge paused: 0 done, 0 skipped, 14 pending — add snippets: changes/фаза-6-внедрить-идеи/snippets/assumption_1cd_build_fake_1cd_path_tables_rows_1cdbmsv8_root_fat.ts, changes/фаза-6-внедрить-идеи/snippets/assumption_guid_read_table_resolve_refs_true_ref_rv_b_lazy_blob_.ts, changes/фаза-6-внедрить-идеи/snippets/fact_status_table_sizes_unit_1c_8_1_1c_8_3_1c_prometheusexporter.ts, changes/фаза-6-внедрить-идеи/snippets/assumption_timings_histogram_read_metadata_read_table_ms_status_.ts, changes/фаза-6-внедрить-идеи/snippets/fact_cp1251_utf_8_middleware_encoding_cp1251_7_7_utf_8_8_x_unit_.ts, changes/фаза-6-внедрить-идеи/snippets/assumption_type_priority_str_num_date_bool_ref_dbname_priority_5.ts, changes/фаза-6-внедрить-идеи/snippets/assumption_toon_json_transform_py_unit_3_toon.ts, changes/фаза-6-внедрить-идеи/snippets/assumption_3_xml_3_json_toon_unit_xml_otymko_gitrules.ts, changes/фаза-6-внедрить-идеи/snippets/assumption_pii_regexp_anonymize_unit.ts, changes/фаза-6-внедрить-идеи/snippets/assumption_mcp_search_schema_query_reference106_unit_alexkmbk_1c.ts, changes/фаза-6-внедрить-идеи/snippets/assumption_mcp_compare_structures_source_target_xlsx_unit_rdt1c.ts, changes/фаза-6-внедрить-идеи/snippets/assumption_mcp_query_table_table_filters_limit_read_table_field_.ts, changes/фаза-6-внедрить-идеи/snippets/assumption_dump_metadata_path_fmt_yaml_json_git_unit_1c_company_.ts, changes/фаза-6-внедрить-идеи/snippets/assumption_docs_ideas_md_6_readme.ts"
+}
