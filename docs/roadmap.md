@@ -117,3 +117,31 @@ npx vitest run              # .ts-сниппеты для Orion shield
 Каждая фаза открывается в Orion (think → draft → ручная доводка design/tasks),
 закрывается shield + out (SUCCESS, guard allPass), затем архивируется
 в `changes/archive/`.
+
+---
+
+## Фазы 12–16 (закрыты)
+
+Фазы, добавленные после 7–11, реализованы и заархивированы
+(`changes/archive/`):
+
+- **Фаза 12** — хвосты записи: fat_level 1 (объекты >8 МБ), indirect-страницы,
+  защита записи (`LockError`), обратная совместимость.
+- **Фаза 13** — zero-setup A: `load_8x.load_direct` — прямая запись в КОПИЮ
+  `1Cv8.1CD` без HTTP-расширения; `copy_1cd`, `append_records`.
+- **Фаза 14** — индексы (spike, Вариант A): reverse-engineering показал старый
+  image-формат объекта индекса (отличен от Tool1CD); битовая упаковка ключей
+  не расшифрована, запись вслепую небезопасна → **реализация НЕ выполнялась**,
+  ограничение «индексы не пересобираются» задокументировано (`docs/format-8x.md`,
+  раздел «Индексы (Фаза 14, spike)»).
+- **Фаза 15** — документы: REF-поля (`_FLD...RREF` → `_IDRREF` приёмника по
+  естественному ключу), реквизиты документа (`_NUMBER`/`_DATE_TIME`/`_POSTED`),
+  табличные части (`_<Base>_VT<num>`, parent + `_LINENO`); ref-warnings.
+- **Фаза 16** — надёжность записи: `verify_after` (roundtrip без потерь),
+  атомарный replace (`work.1CD` → `os.replace`), лимиты (`max_objects`, ENOSPC),
+  чистка tmp; как проверить копию — `docs/zero-setup.md`.
+- **Инфраструктура**: ворота — `bash scripts/gates.sh` (pytest+ruff+mypy+vitest);
+  тесты больших баз — `E:\test` / `ONEC_TEST_TMP` (см. `pytest.ini`).
+
+Статус на конец фаз 14–16: **проект ≈98–100%** (см. `docs/backlog.md`,
+`docs/ideas.md`). Остались только опциональные пункты блок-листа.
