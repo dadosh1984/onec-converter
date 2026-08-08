@@ -30,3 +30,18 @@ jobs:
 
       - name: pytest (unit)
         run: bash scripts/gates.sh pytest
+
+      - name: check_bsl (static, расширение 1С)
+        run: python scripts/check_bsl.py
+
+      - name: build + twine check (сборка пакета)
+        # только один python в матрице — сборка не зависит от версии
+        run: |
+          python -m pip install build twine
+          python -m build
+          python -m twine check dist/*
+        if: matrix.python == '3.11'
+
+      - name: docker build (образ)
+        run: docker build -t onec-converter:ci .
+        if: matrix.python == '3.11'

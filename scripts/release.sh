@@ -12,15 +12,13 @@ VER="${1:?укажите версию, напр. 0.23.0}"
 DRY=0
 [[ "${2:-}" == "--dry-run" ]] && DRY=1
 
-# --- 1. бамп версии в pyproject.toml ---
-if grep -q "version = \"$VER\"" pyproject.toml; then
-  echo "версия $VER уже в pyproject.toml"
+# --- 1. бамп версии в едином источнике (src/onec_converter/__init__.py) ---
+if grep -q "__version__ = \"$VER\"" src/onec_converter/__init__.py; then
+  echo "версия $VER уже в __version__"
 else
-  sed -i "s/^version = \".*\"/version = \"$VER\"/" pyproject.toml
-  echo "pyproject.toml -> version $VER"
+  sed -i "s/__version__ = \".*\"/__version__ = \"$VER\"/" src/onec_converter/__init__.py
+  echo "__init__.py -> __version__ $VER"
 fi
-# --- и в cli.py (--version) ---
-sed -i "s/version='[0-9.]*'/version='$VER'/" src/onec_converter/cli.py
 
 # --- 2. сборка ---
 echo "== build =="

@@ -1,0 +1,16 @@
+{
+  "title": "фаза-30-защита-повторений",
+  "goal": "Фаза 30 — защита от повторений (после регрессий Module.bsl/Dockerfile/anonymizer). Задачи: (1) CI: добавить шаг docker build . (ловит регрессии Dockerfile) и шаг python -m build + twine check (сборка пакета) на каждый push/PR — в .github/workflows/ci.yml (не ломая существующие gates); (2) scripts/check_bsl.py — лёгкая статическая проверка .bsl-файлов: дубли `Функция <имя>(` в одном модуле, необъявленные параметры (переменная используется, но не в сигнатуре и не объявлена), без новых зависимостей; добавить шаг в CI; (3) единый источник версии: `version = {attr = \"onec_converter.__version__\"}` в pyproject.toml, `__version__ = \"0.2.0\"` в src/onec_converter/__init__.py, cli.py --version читает из __init__ (import), scripts/release.sh бампит только __init__.py; тесты версии (уже читают pyproject — проверить совместимость). Ворота зелёные, релиз 0.30.0 в конце (TestPyPI, PyPI, GitHub Release). — Python/CI (pyproject, .github/workflows/ci.yml, scripts/check_bsl.py, src/onec_converter/__init__.py, cli.py, scripts/release.sh)",
+  "platform": "Философия: авторский код. Ворота: mypy strict, ruff, pytest, vitest. Единый источник версии — не сломать текущие тесты версии (уже читают pyproject). check_bsl — лёгкий скрипт без новых зависимостей. CI-шаги docker/build — не ломать существующий ci.yml (gates).",
+  "constraints": "high",
+  "budget": "high",
+  "clarity": "clear",
+  "language": "ru",
+  "appliesLessons": [
+    "mcp-python-1-7:forge:01528e6c32f6",
+    "фаза-7-сквозной-перенос:shield:be4adfcf0907",
+    "фаза-8-xlsx-отчёты:shield:2aa0eefd02e7",
+    "migrate-tool-e2e-pipeline:shield:7fa3ad4497fa",
+    "фаза-11-новая-порция:forge:1cab45743c7e"
+  ]
+}

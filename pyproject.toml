@@ -4,7 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "onec-converter"
-version = "0.2.0"
+# версия берётся из onec_converter.__version__ (единый источник, см. [tool.setuptools.dynamic])
+dynamic = ["version"]
 description = "Перенос данных между информационными базами 1С (MCP-сервер + CLI)"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -42,6 +43,9 @@ onec-converter = "onec_converter.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "onec_converter.__version__"}
 
 [tool.ruff]
 line-length = 100

@@ -26,7 +26,5 @@ def test_python_m_cli_version():
         capture_output=True, text=True, env=env, check=False,
         cwd=Path(__file__).resolve().parents[1])
     assert proc.returncode == 0, proc.stderr
-    import tomllib as _tomllib
-    _py = Path(__file__).resolve().parents[1] / 'pyproject.toml'
-    _ver = _tomllib.loads(_py.read_text(encoding='utf-8'))['project']['version']
+    from onec_converter import __version__ as _ver
     assert _ver in proc.stdout

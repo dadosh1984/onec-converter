@@ -14,6 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .http_client import HttpClient83
 from .intermediate import (
     OBJ_ATTRS,
@@ -470,7 +471,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog='onec-converter',
         description='Перенос данных между ИБ 1С (CLI без MCP-клиента).')
-    p.add_argument('--version', action='version', version='0.2.0')
+    p.add_argument('--version', action='version',
+                  version=__version__)
     sub = p.add_subparsers(dest='command', required=True)
 
     p_inspect = sub.add_parser('inspect', help='Метаданные источника')

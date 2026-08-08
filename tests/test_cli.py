@@ -26,11 +26,8 @@ def test_version(capsys):
 
 
 def _pkg_version() -> str:
-    import pathlib
-    import tomllib
-    py = pathlib.Path(__file__).resolve().parents[1] / 'pyproject.toml'
-    data = tomllib.loads(py.read_text(encoding='utf-8'))
-    return data['project']['version']
+    from onec_converter import __version__
+    return __version__
 
 
 def test_unknown_command_exit_2():
