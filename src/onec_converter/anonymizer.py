@@ -23,10 +23,12 @@ import re
 import warnings
 from typing import Any
 
+# ФИО: строго 3 слова, каждое с заглавной (классика «Иванов Иван Иванович»).
+# НЕ маскируем произвольные фразы («красный диван», «Ноутбук Lenovo»)
+# и нижний регистр — порча данных опаснее недомаскировки редких 2-словных ФИО.
 _FIO_RE = re.compile(
-    r'(?P<last>[А-ЯЁа-яёA-Za-z]{2,})'
-    r'(?:\s+(?P<first>[А-ЯЁа-яёA-Za-z]{2,}))?'
-    r'(?:\s+(?P<mid>[А-ЯЁа-яёA-Za-z]{2,}))?')
+    r'\b([А-ЯЁA-Z][а-яёa-z]{1,})\s+([А-ЯЁA-Z][а-яёa-z]{1,})\s+'
+    r'([А-ЯЁA-Z][а-яёa-z]{1,})\b')
 _PHONE_RE = re.compile(r'(?<!\d)(\+?\d[\d\s()-]{8,17}\d)(?!\d)')
 _INN_RE = re.compile(r'(?<!\d)(\d{9,12})(?!\d)')
 
@@ -47,19 +49,10 @@ PII_PROFILES: dict[str, list[str]] = {
 
 
 def mask_fio(value: str) -> str:
-    """«Иванов Иван Иванович»→«Иванов И. И.»; «Иванов Иван»→«Иванов И.»;
-    любой регистр (иванов иван иванович) — тоже маскируется."""
-    def repl(m: re.Match[str]) -> str:
-        last = m.group('last')
-        first = m.group('first')
-        mid = m.group('mid')
-        parts = [last]
-        if first:
-            parts.append(f'{first[0]}.')
-        if mid:
-            parts.append(f'{mid[0]}.')
-        return ' '.join(parts)
-    return _FIO_RE.sub(repl, value)
+    """«Иванов Иван Иванович» → «Иванов И. И.». Только 3 слова с заглавной;
+    произвольные фразы и нижний регистр НЕ трогаются (не портим данные)."""
+    return _FIO_RE.sub(lambda m: f'{m.group(1)} {m.group(2)[0]}. {m.group(3)[0]}.',
+                       value)
 
 
 def mask_phone(value: str) -> str:

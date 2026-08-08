@@ -7,13 +7,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# зависимости отдельно (кеширование слоя)
-COPY pyproject.toml ./
-RUN pip install --upgrade pip && pip install -e .
-
-# исходники
+# исходники + метаданные (LICENSE/README нужны pip install -e ., т.к. они в pyproject)
+COPY pyproject.toml LICENSE README.md ./
 COPY src ./src
-RUN pip install -e .
+
+# зависимости + сам пакет (после копирования src — pyproject ссылается на where=["src"])
+RUN pip install --upgrade pip && pip install -e .
 
 # точка входа — CLI; MCP-сервер: python -m onec_converter.mcp_server
 ENTRYPOINT ["onec-converter"]

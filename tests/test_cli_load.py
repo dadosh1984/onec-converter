@@ -50,7 +50,8 @@ def test_load_http_ok(tmp_path: Path, monkeypatch, capsys):
     batch = _batch(tmp_path)
 
     class FakeHttp:
-        def __init__(self, base_url: str):
+        def __init__(self, base_url: str, retries: int = 3,
+                     api_key: str | None = None):
             self.base_url = base_url
 
         async def load(self, objects, source_ib, target_ib, replace=False):
@@ -75,7 +76,8 @@ def test_load_http_errors(tmp_path: Path, monkeypatch, capsys):
     batch = _batch(tmp_path)
 
     class FakeHttp:
-        def __init__(self, base_url: str):
+        def __init__(self, base_url: str, retries: int = 3,
+                     api_key: str | None = None):
             self.base_url = base_url
 
         async def load(self, objects, source_ib, target_ib, replace=False):

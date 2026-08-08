@@ -222,7 +222,12 @@ def cmd_transform(args: argparse.Namespace) -> int:
 
 async def _http_load(objs: list[dict[str, Any]],
                      args: argparse.Namespace) -> tuple[int, int, list[str]]:
-    client = HttpClient83(args.http)
+    from .config import ProjectConfig
+    cfg = ProjectConfig.load()
+    api_key = args.api_key or cfg._raw.get('api_key', '') or cfg._raw.get('target_api_key', '')
+    retries = args.retries or cfg.retries
+    client = HttpClient83(args.http, retries=retries,
+                          api_key=api_key or None)
     try:
         results = await client.load(objs, args.source_ib, args.target_ib)
     finally:
@@ -503,6 +508,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help='каталог для копии приёмника (--direct)')
     p_load.add_argument('--source-ib', default='source')
     p_load.add_argument('--target-ib', default='target')
+    p_load.add_argument('--api-key', default='',
+                        help='ключ аутентификации приёмника (X-API-Key, Фаза 18)')
+    p_load.add_argument('--retries', type=int, default=0,
+                        help='число повторов HTTP (0 = из конфига/по умолчанию)')
 
     p_status = sub.add_parser('status', help='Состояние пайплайна')
     p_status.add_argument('--project-dir', default='.')
