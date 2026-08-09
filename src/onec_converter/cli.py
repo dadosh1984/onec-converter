@@ -362,7 +362,8 @@ async def _http_load(objs: list[dict[str, Any]],
     token_url = args.token_url or cfg.token_url
     client_id = args.client_id or cfg.client_id
     client_secret = args.client_secret or cfg.client_secret
-    secret = args.secret or cfg.secret or cfg._raw.get('secret', '')
+    secret_cfg = cfg.secret or cfg._raw.get('secret', '')
+    secret = _resolve_secret(args.secret) or secret_cfg
     client = HttpClient83(args.http, retries=retries,
                           api_key=api_key or None,
                           token_url=token_url or None,
@@ -422,8 +423,9 @@ def cmd_mint_token(args: argparse.Namespace) -> int:
     """
     from .jwt_auth import mint_jwt
 
-    if not args.secret:
-        return _err('не задан --secret')
+    secret = _resolve_secret(args.secret)
+    if not secret:
+        return _err('не задан секрет: --secret, ONEC_SECRET или вводом (E3)')
     if getattr(args, 'dry_run', False):
         payload = {'iss': args.issuer, 'sub': 'onec-loader',
                    'iat': int(time.time()), 'exp': int(time.time()) + args.exp_min * 60}
@@ -434,7 +436,7 @@ def cmd_mint_token(args: argparse.Namespace) -> int:
         print(json.dumps({'header': header, 'payload': payload},
                          ensure_ascii=False, indent=2))
         return 0
-    token = mint_jwt(args.secret, args.issuer, args.exp_min * 60,
+    token = mint_jwt(secret, args.issuer, args.exp_min * 60,
                       kid=getattr(args, 'kid', '') or None)
     if getattr(args, 'json', False):
         print(json.dumps({'token': token,
@@ -1055,6 +1057,25 @@ def cmd_dump_records(args: argparse.Namespace) -> int:
             total += len(chunk)
         out.write(']\n')
     return 0
+
+
+def _resolve_secret(flag: str = '', env_name: str = 'ONEC_SECRET') -> str:
+    """Секрет не светится в ps/history/логах (аудит раунда 6, E3):
+    приоритет — флаг (для CI), затем env ONEC_SECRET, затем (в TTY) ввод
+    из stdin без эха в истории. Возвращает '' если ниоткуда не найден."""
+    if flag:
+        return flag
+    v = os.environ.get(env_name, '')
+    if v:
+        return v
+    from .terminal import is_tty
+
+    if is_tty():
+        try:
+            return input(f'{env_name} (секрет, без эха в истории): ').strip()
+        except EOFError:
+            return ''
+    return ''
 
 
 def _jsonable(v: Any) -> Any:

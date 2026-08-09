@@ -1,0 +1,16 @@
+{
+  "title": "фаза-57-0-40",
+  "goal": "Фаза 57 (0.40.0): безопасность. E3: секреты (mint-token --secret, load --secret) читать из env ONEC_SECRET или stdin, чтобы не светить в ps/history (флаг остаётся, приоритет env). E1: маскировать пароль в DSN/URL в ошибках и логах sql_source (УЖЕ есть secret_mask; проверить и применить к traceback/сообщениям). E4: политика snapshot.1CD — авто-чистка временной копии приёмника после успешной записи (load --direct), оставить snapshot опцией. A7 формул CSV уже в Фазе 54. Баланс: не переусердствовать, не сломать HTTP-загрузку и тесты, ворота green.",
+  "platform": "",
+  "constraints": "compact",
+  "budget": "compact",
+  "clarity": "vague",
+  "language": "ru",
+  "appliesLessons": [
+    "фаза-52-0-35:forge:505593766a06",
+    "фаза-37-0-20:forge:f966453280f8",
+    "фазу-22-безопасность-приёмника:forge:f3704b5251c2",
+    "фаза-34-0-17:forge:2d0b3e7bb4a6",
+    "фаза-45-0-28:forge:5589aab4fd20"
+  ]
+}
