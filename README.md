@@ -329,6 +329,31 @@ onec-converter status --project-dir project/
 mcp: python -m onec_converter.mcp_server
 ```
 
+## Подключение к агенту pi
+
+Pi сам не несёт встроенный MCP, но читает MCP-серверы через расширение
+`pi-mcp-extension` (глобальный конфиг `~/.pi/agent/mcp.json`). Установить
+onec-converter для pi можно одной командой:
+```
+bash scripts/install-pi-mcp.sh   # глобальная установка + регистрация в pi
+```
+Скрипт обновляет пакет с PyPI и добавляет сервер в `mcp.json`:
+```jsonc
+"onec-converter": {
+  "transport": "stdio",
+  "command": "onec-converter",
+  "args": ["mcp", "--stdio"],
+  "lifecycle": "lazy"
+}
+```
+После перезапуска pi агент видит 18 тулов переноса
+(`base_health`, `table_sizes`, `compare_structures`, `auto_map_schemas`, …).
+Проверка протокола без pi:
+```
+python -c "import json"
+# JSON-RPC initialize + tools/list -> 18 тулов
+```
+
 ## Порядок переноса (команды агенту)
 
 Универсальная последовательность команд MCP-сервера — **плейбук**
