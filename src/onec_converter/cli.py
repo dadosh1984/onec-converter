@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -374,15 +375,72 @@ def cmd_pii_report(args: argparse.Namespace) -> int:
 def cmd_mint_token(args: argparse.Namespace) -> int:
     """Выпуск локального Bearer-токена (HS256 JWT) на общем секрете (Фаза 33).
 
-    Позволяет использовать авторизацию по JWT на приёмнике без
-    OAuth2-сервера: токен принимается Module.bsl::ПроверитьJWT.
+    --dry-run — показать payload (claims) без подписи; --json — вывод
+    {'token','exp'} для скриптовой интеграции (Фаза 45).
     """
     from .jwt_auth import mint_jwt
 
     if not args.secret:
         return _err('не задан --secret')
+    if getattr(args, 'dry_run', False):
+        payload = {'iss': args.issuer, 'sub': 'onec-loader',
+                   'iat': int(time.time()), 'exp': int(time.time()) + args.exp_min * 60}
+        print(json.dumps({'header': {'alg': 'HS256', 'typ': 'JWT'},
+                          'payload': payload},
+                         ensure_ascii=False, indent=2))
+        return 0
     token = mint_jwt(args.secret, args.issuer, args.exp_min * 60)
-    print(token)
+    if getattr(args, 'json', False):
+        print(json.dumps({'token': token,
+                          'exp': int(time.time()) + args.exp_min * 60},
+                         ensure_ascii=False))
+    else:
+        print(token)
+    return 0
+
+
+def cmd_ai_map(args: argparse.Namespace) -> int:
+    """Авто-маппинг схем двух баз -> правила TOON (Фаза 45, обёртка MCP-тула)."""
+    from .ai_skills import auto_map_schemas
+    from .source_8x_file import read_metadata
+
+    try:
+        src = Path(args.source_dir) / '1Cv8.1CD'
+        tgt = Path(args.target_dir) / '1Cv8.1CD'
+        if not src.is_file() or not tgt.is_file():
+            return _err('нет 1Cv8.1CD в --source-dir/--target-dir')
+        res = auto_map_schemas(read_metadata(src), read_metadata(tgt))
+    except Exception as exc:  # noqa: BLE001 — показать как ошибку CLI
+        return _err(f'ai-map: {exc}')
+    rules = {'version': 1, 'objects': res['rules'], 'enums': {}}
+    if args.out:
+        Path(args.out).write_text(
+            json.dumps(rules, ensure_ascii=False, indent=2), encoding='utf-8')
+        print(json.dumps({'ok': True, 'out': args.out,
+                          'matched': res['matched'],
+                          'unmatched': res['unmatched']}, ensure_ascii=False))
+    else:
+        print(json.dumps(rules, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_ai_explain(args: argparse.Namespace) -> int:
+    """Объяснение причин расхождений структур (Фаза 45)."""
+    from .ai_skills import explain_diff
+    from .mcp_server import diff_structures
+    from .source_8x_file import read_metadata
+
+    try:
+        src = Path(args.source_dir) / '1Cv8.1CD'
+        tgt = Path(args.target_dir) / '1Cv8.1CD'
+        if not src.is_file() or not tgt.is_file():
+            return _err('нет 1Cv8.1CD в --source-dir/--target-dir')
+        reasons = explain_diff(diff_structures(
+            read_metadata(src), read_metadata(tgt)))
+    except Exception as exc:  # noqa: BLE001 — показать как ошибку CLI
+        return _err(f'ai-explain: {exc}')
+    for r in reasons:
+        print(r)
     return 0
 
 
@@ -995,6 +1053,22 @@ def build_parser() -> argparse.ArgumentParser:
                         help='issuer токена')
     p_mint.add_argument('--exp-min', type=int, default=60,
                         help='срок жизни в минутах')
+    p_mint.add_argument('--dry-run', action='store_true',
+                        help='показать header/payload без подписи (Фаза 45)')
+    p_mint.add_argument('--json', action='store_true',
+                        help='вывод {"token","exp"} для скриптов (Фаза 45)')
+
+    p_am = sub.add_parser('ai-map',
+                          help='Авто-маппинг схем двух баз -> правила TOON (Фаза 45)')
+    p_am.add_argument('--source-dir', required=True, help='ИБ-источник')
+    p_am.add_argument('--target-dir', required=True, help='ИБ-приёмник')
+    p_am.add_argument('--out', default='',
+                      help='запись правил rules.json (иначе stdout)')
+
+    p_ae = sub.add_parser('ai-explain',
+                          help='Причины расхождений структур двух баз (Фаза 45)')
+    p_ae.add_argument('--source-dir', required=True, help='ИБ-источник')
+    p_ae.add_argument('--target-dir', required=True, help='ИБ-приёмник')
 
     p_pii = sub.add_parser('pii-report',
                            help='Отчёт по анонимизации ПДн (152-ФЗ/152 УЗ, Фаза 37)')
@@ -1042,6 +1116,8 @@ def main(argv: list[str] | None = None) -> int:
         'sonar-report': cmd_sonar_report,
         'export-kd3': cmd_export_kd3,
         'mint-token': cmd_mint_token,
+        'ai-map': cmd_ai_map,
+        'ai-explain': cmd_ai_explain,
         'pii-report': cmd_pii_report,
         'shell': cmd_shell,
     }

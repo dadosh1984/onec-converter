@@ -368,14 +368,12 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 - [x] [assumption] ворота зелёные; релиз 0.27.0
 ## Фаза 45 — AI-навыки: глубина и CLI (0.28.0)
 
-- [ ] [fact] compress_metadata: опция сохранения саммари в файл
-- [ ] [fact] auto_map_schemas: confidence (exact/synonym) в выводе
-- [ ] [fact] CLI ai-map / ai-explain (обёртки над MCP-тулами)
-- [ ] [fact] mint-token --dry-run (payload до подписи) и --json
-- [ ] [fact] Module.bsl ПроверитьКлюч: задержка/блок после N неудач (rate-limit)
-- [ ] [fact] тесты: CLI ai-map/ai-explain, mint-token --json, rate-limit в BSL
-- [ ] [assumption] ворота зелёные; релиз 0.28.0
-
+- [x] [fact] compress_metadata: save-to-file (out_path)
+- [x] [fact] confidence (exact/synonym) в auto_map_schemas
+- [x] [fact] CLI ai-map/ai-explain (обёртки MCP-тулов; реестр 26)
+- [x] [fact] mint-token --dry-run (payload до подписи) и --json
+- [x] [fact] rate-limit в Module.bsl ПроверитьКлюч (блок после 5 неудач)
+- [x] [assumption] ворота зелёные; релиз 0.28.0
 ## Фаза 46 — Продукт и документация (0.29.0)
 
 - [ ] [fact] README: «tamper-evident audit log» для комплаенс-аудитории

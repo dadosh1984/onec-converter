@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from .enum_mapper import normalize_enum_name
@@ -55,7 +57,12 @@ def auto_map_schemas(source_meta: dict[str, Any],
                 mapping[src_a['name']] = norm
         rules.append({'source': sname,
                       'target': f"{target_obj['kind']}.{target_obj['name']}",
-                      'attributes': mapping})
+                      'attributes': mapping,
+                      # уверенность сопоставления: exact — по нормализованному
+                      # имени, synonym — по синониму (требует подтверждения)
+                      'confidence': ('exact' if
+                                     _norm_field(target_obj['name']) == tnorm_base
+                                     else 'synonym')})
         matched += 1
     return {'ok': True, 'rules': rules, 'matched': matched,
             'unmatched': len(source_meta['objects']) - matched}
@@ -81,11 +88,14 @@ def explain_diff(diff: dict[str, Any]) -> list[str]:
 
 
 def compress_metadata(meta: dict[str, Any],
-                      top_tables: int = 15) -> dict[str, Any]:
+                      top_tables: int = 15,
+                      out_path: str | Path | None = None) -> dict[str, Any]:
     """Сжать метаданные (тысячи объектов) до краткого саммари для LLM.
 
     Возвращает {kinds:{kind: count}, objects, tables, top:[...], total}.
     top — первые по числу реквизитов (грубая оценка объёма).
+    out_path — опционально сохранить саммари JSON-файлом для переиспользования
+    между вызовами агента без пересчёта.
     """
     objs = meta.get('objects') or []
     counts: dict[str, int] = {}
@@ -97,6 +107,12 @@ def compress_metadata(meta: dict[str, Any],
     top = [{'kind': o.get('kind'), 'name': o.get('name'),
             'table': o.get('table'), 'attrs': len(o.get('attributes') or [])}
            for o in ranked[:top_tables]]
-    return {'kinds': counts, 'objects': len(objs), 'tables': len(objs),
-            'top': top, 'total_attrs': sum(
-                len(o.get('attributes') or []) for o in objs)}
+    summary = {'kinds': counts, 'objects': len(objs), 'tables': len(objs),
+               'top': top, 'total_attrs': sum(
+                   len(o.get('attributes') or []) for o in objs)}
+    if out_path:
+        p = Path(out_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(summary, ensure_ascii=False, indent=2),
+                     encoding='utf-8')
+    return summary

@@ -21,7 +21,8 @@ def test_bsl_accepts_key_or_token():
     text = BSL.read_text(encoding='utf-8-sig')
     # shared-secret остаётся, JWT — дополнение, а не замена
     assert 'x-api-key' in text
-    assert 'Возврат ПроверитьТокен(Запрос)' in text
+    assert 'ПроверитьТокен(Запрос)' in text
+    assert 'СчётчикНеудач' in text  # rate-limit (Фаза 45)
 
 
 def test_config_auth_section(tmp_path: Path):

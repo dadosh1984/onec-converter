@@ -156,7 +156,9 @@ HTTP-режим использует `HttpClient83` с ретраями; при 
    в `onec.toml` секцией `[auth]`.
 3. **Локальный mint-token** (Фаза 33, без OAuth2-сервера):
    `--secret секрет` — клиент выпускает HS256 JWT на месте
-   (`onec-converter mint-token --secret секрет` для отдельных токенов)
+   (`onec-converter mint-token --secret секрет` для отдельных токенов;
+   `--dry-run` — показать header/payload до подписи, `--json` —
+   `{"token","exp"}`, Фаза 45)
    и шлёт `Authorization: Bearer <jwt>`. Секрет тот же, что задан
    в приёмнике (`ОжидаемыйКлюч` Module.bsl). `--token-url` и `--secret`
    взаимоисключающие.

@@ -1,0 +1,16 @@
+{
+  "title": "фаза-45-0-28",
+  "goal": "Фаза 45 (0.28.0) — AI-навыки глубже и CLI: (1) auto_map_schemas: confidence на правило ('exact' по имени / 'synonym' по синониму); (2) compress_metadata: опция out_path — сохранить саммари JSON-файлом; (3) CLI ai-map (--source-dir/--target-dir/--out rules.json -> правила TOON) и ai-explain (причины расхождений через diff_structures+explain_diff); реестр 26; (4) mint-token --dry-run (header/payload без подписи) и --json ({\"token\",\"exp\"}); (5) Module.bsl ПроверитьКлюч: rate-limit — Перем СчётчикНеудач, блокировка после 5 неудач, сброс при успехе, честный комментарий о рамках сессии; (6) тесты +6 в tests/test_phase45_ai_cli.py (confidence, save, mint-token dry-run/json, BSL rate-limit, check_bsl проходит). CHANGELOG 0.28.0, план ✅, релиз.",
+  "platform": "тесты в E:\\test через gates.sh; версия 0.28.0; реестр CLI 24->26 (ai-map, ai-explain)",
+  "constraints": "compact",
+  "budget": "compact",
+  "clarity": "vague",
+  "language": "ru",
+  "appliesLessons": [
+    "фазу-23-conformance-тесты:forge:753265ca3073",
+    "фаза-40-0-23:forge:609368098be5",
+    "фазу-24-полный-сценарий:forge:1b6dbaa2498b",
+    "фазу-25-audit-логирование:forge:7c216dc57da7",
+    "фаза-6-внедрить-идеи:shield:fc4c61f342db"
+  ]
+}

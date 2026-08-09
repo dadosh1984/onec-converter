@@ -3,7 +3,7 @@
 Сгенерировано из фактического реестра: CLI 23 подкоманды, MCP 13 тулов.
 Поток данных: inspect → extract → map → transform → load → verify.
 
-## CLI (24)
+## CLI (26)
 
 | Команда | Вход | Выход | Назначение |
 |---|---|---|---|
@@ -31,6 +31,8 @@
 | pii-report | audit.jsonl | JSON | отчёт по анонимизации ПДн (152-ФЗ/152 УЗ, Фаза 37) |
 | shell | source-dir | REPL | интерактивное исследование базы (tables/query, Фаза 39) |
 | audit-verify | audit.jsonl | rc | проверка tamper-evident цепочки (+ --cross-files, Фаза 42) |
+| ai-map | source+target dir | rules | авто-маппинг схем -> правила TOON (Фаза 45) |
+| ai-explain | source+target dir | текст | причины расхождений структур (Фаза 45) |
 
 Общие флаги: `--source-dir`, `--out`, `--format json|xlsx`, `--audit-file`.
 
