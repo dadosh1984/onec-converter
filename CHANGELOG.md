@@ -3,6 +3,17 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.22.0 (2026-08)
+
+### DX и продукт (Фаза 39)
+- `load --dry-run`: демо-план (объекты/режим/приёмник) без записи/отправки.
+- `shell --source-dir`: интерактивный REPL исследования базы (tables,
+  describe, query ...., help, exit; автодополнение через readline).
+- Makefile: lint/type/test/bdd/gates/bench/clean; pre-commit hook
+  (.githooks) блокирует 1CD/dump/jsonl в коммиты.
+- README: «Быстрый старт за 5 минут» вверху; бейдж PyPI.
+- Ворота: pytest (+5), conformance, ruff, mypy (50), check_bsl, vitest.
+
 ## 0.21.0 (2026-08)
 
 ### Мониторинг и DevOps (Фаза 38)

@@ -4,8 +4,21 @@
 ![Python](https://img.shields.io/pypi/pyversions/onec-converter)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Version](https://img.shields.io/github/v/tag/dadosh1984/onec-converter)
+![PyPI](https://img.shields.io/pypi/v/onec-converter)
 
 Авторский проект (код пишется с нуля; чужие проекты — только источник идей о форматах).
+
+## Быстрый старт за 5 минут (Фаза 39)
+1. **Установка**: `pip install onec-converter` (пакет на [PyPI](https://pypi.org/project/onec-converter/)).
+2. **Извлечение** из источниковой ИБ 8.x:
+   ```
+   onec-converter extract --source-dir "./src" --out extract.json
+   ```
+3. **Правила и применение**: `map` (сгенерировать) → `transform --rules-file rules.json --input extract.json --out transformed.json`.
+4. **Загрузка**: для стенда `clone-db` (копия приёмника), для боевой миграции — `load --direct ./tgt --input transformed.json --workdir ./work` (+ `--index-repair`).
+5. **Проверка**: `verify`/`query`, аудит `--audit-file audit.jsonl`, метрики `metrics`.
+
+Полный пайплайн и MCP-подключение к Claude/Cursor — ниже.
 
 ## Возможности
 - Перенос данных **из любой версии ИБ 1С** (7.7, 8.1, 8.2, 8.3) в **1С 8.x** (основной
@@ -164,6 +177,15 @@ onec-converter export-kd3 --rules rules.json --out kd3.xml
 XML-представление правил (DataContainer/Rules/Attributes/EnumMappings) для
 ревью и переноса (авторский формат в стиле КД3). Карта всех команд —
 `docs/commands-map.md`.
+
+### shell — интерактивное исследование базы (Фаза 39)
+```
+onec-converter shell --source-dir ./src
+> tables                      # список таблиц
+> describe _Reference10       # поля/типы таблицы
+> query _Reference10 WHERE Банк   # первые строки (лимит 20)
+> exit
+```
 
 ### Разработка и качество (Фаза 28)
 ```

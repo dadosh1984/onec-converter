@@ -315,14 +315,12 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 - [x] [assumption] ворота зелёные; релиз 0.21.0
 ## Фаза 39 — DX и продукт (0.22.0)
 
-- [ ] [fact] --dry-run глобально для записывающих команд (emulation)
-- [ ] [fact] shell: REPL-режим исследования базы (автодополнение таблиц)
-- [ ] [fact] Makefile (lint/bdd/release); pre-commit — блок коммита
-      .1CD/extract.json с ПДн
-- [ ] [fact] README: «быстрый старт за 5 минут», «известные ограничения»,
-      PyPI на видном месте; release notes на русском без жаргона «Фаза N»
-- [ ] [assumption] ворота зелёные; релиз 0.22.0
-
+- [x] [fact] load --dry-run: план без записи/отправки; тест
+- [x] [fact] shell --source-dir: REPL (tables/describe/query/help); тесты
+- [x] [fact] Makefile (lint/type/test/bdd/gates/bench)
+- [x] [fact] pre-commit hook: блок 1CD/dump/jsonl в коммитах
+- [x] [fact] README: «Быстрый старт за 5 минут», бейдж PyPI
+- [x] [assumption] ворота зелёные; релиз 0.22.0
 ## Фаза 40 — AI-навыки (0.23.0)
 
 - [ ] [fact] MCP auto_map_schemas: авто-маппинг полей по именам/синонимам

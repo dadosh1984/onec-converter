@@ -348,6 +348,16 @@ def cmd_export_kd3(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_shell(args: argparse.Namespace) -> int:
+    """Интерактивная оболочка для исследования базы 1CD (Фаза 39)."""
+    from .repl import ReplError, run_shell
+
+    try:
+        return run_shell(args.source_dir)
+    except ReplError as exc:
+        return _err(str(exc))
+
+
 def cmd_pii_report(args: argparse.Namespace) -> int:
     """Отчёт по анонимизации ПДн (152-ФЗ / 152 УЗ), Фаза 37."""
     from .gdpr_152_report import PiiReportError, gdpr_report
@@ -442,6 +452,17 @@ def cmd_load(args: argparse.Namespace) -> int:
     """Загрузка батчей в приёмник: файл (--target), HTTP (--http) или прямая
     запись в копию 1CD (--direct, Фаза 13 zero-setup)."""
     objs = load_json_batch(args.input)
+    if getattr(args, 'dry_run', False):
+        # демо-план без изменения файлов/отправки (Фаза 39)
+        plan = {
+            'dry_run': True,
+            'objects': len(objs),
+            'mode': 'direct' if args.direct else ('http' if args.http else 'file'),
+            'target': args.direct or args.http or str(args.target),
+            'note': 'запись/отправка не выполнялась (--dry-run)',
+        }
+        print(json.dumps(plan, ensure_ascii=False, default=str))
+        return 0
     if args.direct:
         from .load_8x import LoadError, load_direct
 
@@ -836,6 +857,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help='сгенерировать скрипт восстановления индексов (--direct, Фаза 34)')
     p_load.add_argument('--pii-masking', action='store_true',
                         help='скрывать ПДн в журнале аудита (Фаза 37)')
+    p_load.add_argument('--dry-run', action='store_true',
+                        help='демо-план без записи/отправки (Фаза 39)')
     p_load.add_argument('--retries', type=int, default=0,
                         help='число повторов HTTP (0 = из конфига/по умолчанию)')
     p_load.add_argument('--audit-file', default='',
@@ -953,6 +976,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_pii.add_argument('--profile', default='RU', choices=['RU', 'UZ'],
                        help='профиль ПДн (RU/152-ФЗ или UZ/152 УЗ)')
 
+    p_shell = sub.add_parser('shell',
+                             help='Интерактивная оболочка исследования базы (Фаза 39)')
+    p_shell.add_argument('--source-dir', required=True,
+                         help='каталог с 1Cv8.1CD')
+
     return p
 
 
@@ -985,6 +1013,7 @@ def main(argv: list[str] | None = None) -> int:
         'export-kd3': cmd_export_kd3,
         'mint-token': cmd_mint_token,
         'pii-report': cmd_pii_report,
+        'shell': cmd_shell,
     }
     try:
         handler = handlers.get(args.command or '')

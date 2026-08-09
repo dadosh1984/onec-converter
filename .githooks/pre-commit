@@ -1,0 +1,44 @@
+#!/bin/sh
+# pre-commit hook: блокирует коммит чувствительных артефактов (Фаза 39).
+# Установка:  git config core.hooksPath .githooks
+# Запрещено:  (1) настоящие файлы баз (*.1CD > 50 МБ);
+#             (2) промежуточные дампы extract/load (*.json) и ПДн-журналы;
+# Использование намеренное — снять флаг, добавив имя в exceptions ниже.
+
+BLOCK_EXTS=".1CD"
+BLOCK_NAMES="extract.json load.json transformed.json"
+BLOCK_SUFFIX=".jsonl"
+
+exceptions=""
+
+blocked=0
+
+for f in $(git diff --cached --name-only); do
+    base=$(basename "$f")
+    skip=0
+    for e in $exceptions; do
+        [ "$base" = "$e" ] && skip=1
+    done
+    [ $skip -eq 1 ] && continue
+
+    case "$base" in
+        *.1CD)
+            size=$(git show ":$f" 2>/dev/null | wc -c)
+            if [ "$size" -gt 52428800 ]; then
+                echo "блокировка: $f — файл базы 1CD (${size} б) в коммите. Используйте clone-db/внешний стор." >&2
+                blocked=1
+            fi
+            ;;
+        extract.json|load.json|transformed.json)
+            echo "блокировка: $f — дамп данных (возможно ПДн) в коммите." >&2
+            blocked=1
+            ;;
+        *.jsonl)
+            echo "блокировка: $f — журнал/дамп может содержать ПДн." >&2
+            blocked=1
+            ;;
+    esac
+done
+
+[ $blocked -ne 0 ] && echo "Коммит отменён pre-commit hook'ом (Фаза 39)." >&2 && exit 1
+exit 0
