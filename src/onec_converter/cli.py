@@ -410,17 +410,31 @@ def cmd_ai_map(args: argparse.Namespace) -> int:
         if not src.is_file() or not tgt.is_file():
             return _err('нет 1Cv8.1CD в --source-dir/--target-dir')
         res = auto_map_schemas(read_metadata(src), read_metadata(tgt))
+        rules = res['rules']
+        if args.objects:
+            from .objects_filter import parse_objects, selects
+
+            specs = parse_objects(args.objects.split(','))
+            kept = []
+            for r in rules:
+                if '.' not in r['source']:
+                    kept.append(r)
+                    continue
+                k, n = r['source'].split('.', 1)
+                if selects(specs, k, n):
+                    kept.append(r)
+            rules = kept
     except Exception as exc:  # noqa: BLE001 — показать как ошибку CLI
         return _err(f'ai-map: {exc}')
-    rules = {'version': 1, 'objects': res['rules'], 'enums': {}}
+    rules_doc = {'version': 1, 'objects': rules, 'enums': {}}
     if args.out:
         Path(args.out).write_text(
-            json.dumps(rules, ensure_ascii=False, indent=2), encoding='utf-8')
+            json.dumps(rules_doc, ensure_ascii=False, indent=2), encoding='utf-8')
         print(json.dumps({'ok': True, 'out': args.out,
                           'matched': res['matched'],
                           'unmatched': res['unmatched']}, ensure_ascii=False))
     else:
-        print(json.dumps(rules, ensure_ascii=False, indent=2))
+        print(json.dumps(rules_doc, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -1206,6 +1220,8 @@ def build_parser() -> argparse.ArgumentParser:
                           help='Авто-маппинг схем двух баз -> правила TOON (Фаза 45)')
     p_am.add_argument('--source-dir', required=True, help='ИБ-источник')
     p_am.add_argument('--target-dir', required=True, help='ИБ-приёмник')
+    p_am.add_argument('--objects', default='',
+                      help='Фильтр объектов (см. extract --objects, Фаза 51 U25)')
     p_am.add_argument('--out', default='',
                       help='запись правил rules.json (иначе stdout)')
 

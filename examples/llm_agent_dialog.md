@@ -42,3 +42,30 @@
   контекста агента вместо тысяч объектов (Фаза 40/45).
 - Агент не угадывает имена полей: сопоставление детерминировано и
   проверяемо.
+
+## Сценарий 2: сжатие метаданных + комплаенс (Фаза 51)
+
+```
+Пользователь:  Оцени объём базы и сколько инвентарей затронет перенос.
+Агент:         [onec-converter compress_metadata source=./bekas top_tables=10]
+               kinds: {Справочник: 42, Документ: 17, РегистрСведений: 8},
+               objects: 67, tables: 67, top: [Справочник.Контрагенты …]
+               → сжато: вместо тысяч объектов агенту отдано 10 строк.
+
+Пользователь:  Перенос уже делался вчера — проверь целостность журнала.
+Агент:         [onec-converter audit_verify audit_file=./logs/audit.jsonl cross_files=true]
+               ok: true, errors: [] — хеш-цепочка и границы ротации целы.
+
+Пользователь:  Сколько кеш-артефактов накопилось?
+Агент:         [onec-converter cache_stats root_dir=.onec_cache]
+               files: 231, bytes: 482134, oldest: 3 дня назад.
+```
+
+## Роль inspect (read-only агент, Фаза 51)
+
+При `ONEC_MCP_ROLE=inspect` write-тулы (`migrate`, `load_direct`) и write-шаги
+плейбука (`init/extract/map/transform/load/preview`) скрыты из списка тулов и
+блокируются — агент может только читать/сверять/планировать, но не менять базы.
+Список для роли (read-only): base_health, table_sizes, compare_structures,
+auto_map_schemas, explain_diff, search_schema, query_sql, guid_diff,
+config_versions, dump_metadata, compress_metadata, audit_verify, cache_stats.

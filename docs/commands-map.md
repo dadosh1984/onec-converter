@@ -1,6 +1,6 @@
 # Карта команд onec-converter (Фаза 29.1)
 
-Сгенерировано из фактического реестра: CLI 23 подкоманды, MCP 13 тулов.
+Сгенерировано из фактического реестра: CLI 28 подкоманд, MCP 18 тулов.
 Поток данных: inspect → extract → map → transform → load → verify.
 
 ## CLI (28)
@@ -38,14 +38,16 @@
 
 Общие флаги: `--source-dir`, `--out`, `--format json|xlsx`, `--audit-file`.
 
-## MCP (13 тулов)
+## MCP (18 тулов)
 
 `tools` (плейбук) → pipeline_status → inspect/extract/map/transform/load
 (виртуальные шаги плейбука через tools()); реальные тулы:
 
-base_health, compare_structures, config_versions, dump_metadata, guid_diff,
+audit_verify, auto_map_schemas, base_health, cache_stats, compare_structures,
+compress_metadata, config_versions, dump_metadata, explain_diff, guid_diff,
 load_direct, migrate, pipeline_status, playbook, query_sql, search_schema,
 table_sizes, tools.
+
 
 | Тул | Вход | Выход | next |
 |---|---|---|---|
@@ -62,6 +64,11 @@ table_sizes, tools.
 | load_direct | target_dir, objects | копия 1CD | verify |
 | playbook | — | последовательность команд | — |
 | migrate | source_dir, target_dir, rules | сквозной перенос | verify |
+| auto_map_schemas | source_dir, target_dir | авто-маппинг | — |
+| explain_diff | source_dir, target_dir | причины расхождений | — |
+| compress_metadata | source_dir, top_tables | саммари для LLM | — |
+| audit_verify | audit_file, cross_files | целостность журнала | — |
+| cache_stats | root_dir | метрики кеша | — |
 
 ## Взаимосвязи (проверка Фазы 29.1)
 
@@ -69,6 +76,7 @@ table_sizes, tools.
   все вызываются в пайплайне или сервисные (doctor/cache/metrics/audit).
 - Аргументы согласованы: `--source-dir`/`--out`/`--format` одинаковы
   в extract/transform/table_sizes/compare_structures.
-- MCP: 13 реальных тулов; дубли удалены в Фазе 29.1
+- MCP: 18 реальных тулов; дубли удалены в Фазе 29.1
   (дубли объединены через --format, см. CHANGELOG 0.7.0);
+  compress_metadata/audit_verify/cache_stats добавлены в Фазе 51 (0.34.0);
   next-цепочки ведут по плейбуку (см. docs/playbook.md).

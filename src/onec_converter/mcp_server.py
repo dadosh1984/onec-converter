@@ -323,7 +323,7 @@ class PipelineState:
     # ---- MCP-обёртки ----
 
     def tools(self) -> list[dict[str, Any]]:
-        return [{'name': 'init', 'doc': 'Привязка пары источник→приёмник (правило 1→1)'},
+        steps = [{'name': 'init', 'doc': 'Привязка пары источник→приёмник (правило 1→1)'},
                 {'name': 'inspect_source', 'doc': 'Метаданные источника (из кеша или парсинга)'},
                 {'name': 'extract', 'doc': 'Данные источника -> промежуточный JSON'},
                 {'name': 'inspect_target', 'doc': 'Структура приёмника'},
@@ -333,6 +333,11 @@ class PipelineState:
                 {'name': 'preview', 'doc': 'Пробная загрузка (dry-run)'},
                 {'name': 'load', 'doc': 'Запись в приёмник через HTTP-сервис'},
                 {'name': 'verify', 'doc': 'Сверка источник↔приёмник (полнота переноса)'}]
+        if _current_role() == 'inspect':
+            # U23: role=inspect — только чтение; write-шаги скрыты из списка
+            write = {'init', 'extract', 'map', 'transform', 'load', 'preview'}
+            steps = [s for s in steps if s['name'] not in write]
+        return steps
 
 
 @visible_tool('pipeline_status', 'Состояние пайплайна переноса: коннекторы, кеш, последний шаг, метрики (точка входа для LLM)')
@@ -426,8 +431,8 @@ def compare_structures(source_dir: str, target_dir: str, format: str = 'json',
     if not src.is_file() or not tgt.is_file():
         return json.dumps({'ok': False, 'error': 'нет 1Cv8.1CD в source_dir/target_dir'},
                           ensure_ascii=False)
-    ms = read_metadata(src)
-    mt = read_metadata(tgt)
+    ms = _run_timeout(60, read_metadata, src)
+    mt = _run_timeout(60, read_metadata, tgt)
     d = diff_structures(ms, mt)
     if format == 'xlsx':
         if not out_file:
@@ -466,7 +471,8 @@ def auto_map_schemas(source_dir: str, target_dir: str) -> str:
                            'error': 'нет 1Cv8.1CD в source_dir/target_dir'},
                           ensure_ascii=False)
     try:
-        res = _amap(read_metadata(src), read_metadata(tgt))
+        res = _amap(_run_timeout(60, read_metadata, src),
+                     _run_timeout(60, read_metadata, tgt))
     except Exception as exc:  # noqa: BLE001 — вернуть ошибку как JSON
         return json.dumps({'ok': False, 'error': str(exc)},
                           ensure_ascii=False)
@@ -485,7 +491,8 @@ def explain_diff(source_dir: str, target_dir: str) -> str:
         return json.dumps({'ok': False,
                            'error': 'нет 1Cv8.1CD в source_dir/target_dir'},
                           ensure_ascii=False)
-    md = diff_structures(read_metadata(src), read_metadata(tgt))
+    md = diff_structures(_run_timeout(60, read_metadata, src),
+                          _run_timeout(60, read_metadata, tgt))
     reasons = _explain(md)
     return json.dumps({'ok': True, 'explanations': reasons[:50]},
                       ensure_ascii=False)
@@ -505,7 +512,7 @@ def search_schema(source_dir: str, query: str) -> str:
     if not cd.is_file():
         return json.dumps({'ok': False, 'error': f'нет 1Cv8.1CD в {source_dir}'},
                           ensure_ascii=False)
-    md = read_metadata(cd)
+    md = _run_timeout(60, read_metadata, cd)
     q = query.strip().lower()
     hits = []
     for o in md['objects']:
@@ -711,10 +718,12 @@ def migrate(project_dir: str, source_ib_id: str, target_ib_id: str,
     `rules` — JSON TOON-правил (см. step_map); `target_url` — HTTP-сервис
     приёмника 8.3; `out_file` — промежуточный JSON (пусто = временный).
     Реальные базы не изменяются: запись только через HTTP-сервис приёмника.
+    Write-тул: при ONEC_MCP_ROLE=inspect недоступен (U23).
     """
     from .terminal import playbook_step
     from .transform import transform_object
 
+    _require_role('load', 'migrate')
     steps: list[dict[str, Any]] = []
 
     def log(name: str, ok: bool, ms: float, summary: str) -> None:
@@ -785,6 +794,61 @@ def migrate(project_dir: str, source_ib_id: str, target_ib_id: str,
     except Exception as exc:  # noqa: BLE001 — MCP-тул возвращает ошибку строкой
         return json.dumps({'ok': False, 'error': str(exc), 'steps': steps},
                           ensure_ascii=False)
+
+
+@visible_tool('compress_metadata', 'Сжатие метаданных базы 1CD до краткого саммари для LLM (kinds, top-таблицы, объём атрибутов) — экономия токенов (U19)')
+def _mcp_compress_metadata(source_dir: str, top_tables: int = 15) -> str:
+    """Сжать метаданные базы 1CD до саммари для LLM. Обычно передать весь
+    read_metadata (тысячи объектов) агенту — дорого; саммари дешевле.
+    """
+    from .ai_skills import compress_metadata
+    from .source_8x_file import read_metadata
+
+    md = _run_timeout(60, read_metadata, source_dir)
+    summary = compress_metadata(md, top_tables=top_tables)
+    return json.dumps(summary, ensure_ascii=False)
+
+
+@visible_tool('audit_verify', 'Проверка целостности audit-журнала (tamper-evident chain) — хеш-цепочка и границы ротации (U20)')
+def _mcp_audit_verify(audit_file: str, cross_files: bool = False) -> str:
+    """Проверить tamper-evident цепочку audit-журнала; empty-нарушений = ок.
+    """
+    from .audit import verify_audit
+
+    errs = _run_timeout(30, verify_audit, audit_file, cross_files)
+    return json.dumps({'ok': len(errs) == 0, 'errors': errs[:50],
+                       'count': len(errs)}, ensure_ascii=False)
+
+
+@visible_tool('cache_stats', 'Метрики дискового кеша: файлы, байты, самый старый артефакт (U22)')
+def _mcp_cache_stats(root_dir: str = '') -> str:
+    """Статистика кеша onec (файлы, размер, возраст), может задать root_dir.
+    """
+    from .cache import Cache
+    from .source_8x_file import _metadata_disk_cache
+
+    cache = Cache(root=Path(root_dir)) if root_dir else _metadata_disk_cache()
+    stats = cache.stats()
+    return json.dumps({'ok': True, **stats}, ensure_ascii=False)
+
+
+def _run_timeout(seconds: float, fn: Callable[..., Any], *args: Any,
+                 **kwargs: Any) -> Any:
+    """Выполнить блокирующий вызов с твёрдым таймаутом (U21).
+
+    future.result(timeout) поднимает TimeoutError по истечении времени, не
+    дожидаясь завершения фонового потока (asyncio.run ждёл join экзекьютора
+    — не подходит). Возвращает результат либо бросает TimeoutError; поток
+    умирает сам после работы.
+    """
+    import concurrent.futures
+
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    fut = ex.submit(fn, *args, **kwargs)
+    try:
+        return fut.result(timeout=seconds)
+    except concurrent.futures.TimeoutError as exc:
+        raise TimeoutError(f'MCP-тул превысил таймаут {seconds}s') from exc
 
 
 def _http_load(objects: list[dict[str, Any]], source_ib: str, target_ib: str,

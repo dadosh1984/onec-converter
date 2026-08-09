@@ -574,13 +574,13 @@ _oAuth2 — реализовано) — в бэклог ниже. План ра�
 
 ## Фаза 51 — MCP и LLM-агент (0.34.0)
 
-- [ ] [fact] asyncio.timeout на read-тулы MCP (U21, закрывает U3)
-- [ ] [fact] MCP-тулы compress_metadata и audit_verify (U19/U20)
-- [ ] [fact] MCP-тул cache_stats (U22)
-- [ ] [fact] ONEC_MCP_ROLE=inspect фильтрует write-тулы из списка tools (U23)
-- [ ] [fact] progress-стриминг migrate (U24)
-- [ ] [fact] auto_map_schemas --objects фильтр (U25); диалог-пример обновлён (U26)
-- [ ] [assumption] ворота зелёные; релиз 0.34.0
+- [x] [fact] asyncio.timeout на read-тулы (_run_timeout) (U21/U3)
+- [x] [fact] MCP-тулы compress_metadata, audit_verify, cache_stats (U19/U20/U22); реестр 15->18
+- [x] [fact] ONEC_MCP_ROLE=inspect фильтрует write-тулы из списка и блокирует (U23)
+- [x] [fact] progress-стриминг migrate в stderr — проверен, нет-оп (U24)
+- [x] [fact] ai-map --objects фильтр правил (U25)
+- [x] [fact] пример-диалог дополнен compress_metadata/audit_verify/cache_stats + inspect (U26)
+- [x] [assumption] ворота зелёные; релиз 0.34.0
 
 ## Фаза 52 — Безопасность (0.35.0)
 

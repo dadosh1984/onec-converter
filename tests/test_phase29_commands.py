@@ -34,8 +34,9 @@ def test_cli_registry_consistent():
 
 def test_commands_map_exists():
     doc = Path('docs/commands-map.md').read_text(encoding='utf-8')
-    assert 'CLI (28)' in doc and 'MCP (13 тулов)' in doc
+    assert 'CLI (28)' in doc and 'MCP (18 тулов)' in doc
     assert 'export-kd3' in doc and 'base_health' in doc
+    assert 'compress_metadata' in doc and 'audit_verify' in doc and 'cache_stats' in doc
     assert 'query_table' not in doc  # дубль удалён в 29.1
 
 

@@ -3,6 +3,27 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.34.0 (2026-08)
+
+### MCP и LLM-агент (Фаза 51, раунд 5)
+- U19/U20/U22: MCP-тулы compress_metadata (саммари метаданных для LLM),
+  audit_verify (целостность tamper-evident цепочки), cache_stats (метрики
+  кеша). Реестр MCP 15 -> 18.
+- U21: твёрдый таймаут на тяжёлые read-тулы (_run_timeout через
+  concurrent.futures) — read_metadata в compare_structures/auto_map_schemas/
+  search_schema/dump_metadata + новые тулы. asyncio.run+to_thread не годился
+  (ждал join экзекьютора).
+- U23: ONEC_MCP_ROLE=inspect — migrate/load_direct блокируются (RbacError),
+  write-шаги плейбука (init/extract/map/transform/load/preview) скрыты из
+  tools(); read-шаги остаются. Роль читается на лету.
+- U24: progress migrate уже стримится в stderr (playbook_step/log) —
+  проверено, нет-оп.
+- U25: `ai-map --objects` — фильтр правил по типам объектов (как verify).
+- U26: examples/llm_agent_dialog.md дополнен сценарием compress_metadata/
+  audit_verify/cache_stats и описанием роли inspect.
+- commands-map.md обновлён: MCP 18 тулов, добавлены новые строки.
+- Ворота: pytest (+9), conformance 5, ruff чисто, mypy (53), check_bsl, vitest.
+
 ## 0.33.0 (2026-08)
 
 ### Покрытие и тесты (Фаза 50, раунд 5)
@@ -22,7 +43,8 @@
 - U49: `gates.sh benchmark` — пороги BENCH_META_MS_MAX/BENCH_READ_MS_MAX
   (дефолты 1000/5000 мс) ловят деградацию чтения.
 - U48: Windows CI-джоба (windows-latest, unit+coverage+conformance).
-- Fix gates.sh: CRLF в именах модулей () ломал coverage-замер — 0%;
+- Fix gates.sh: CRLF в именах модулей (
+) ломал coverage-замер — 0%;
   PYTHONPATH=src для benchmark и pytest-coverage (pytest.ini pythonpath
   для pytest-cov недостаточен).
 - Fix: real-base e2e (2.5 ГБ копии) размечены `integration` и исключены
