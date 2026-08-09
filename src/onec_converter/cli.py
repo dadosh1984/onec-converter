@@ -444,6 +444,91 @@ def cmd_ai_explain(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_verify(args: argparse.Namespace) -> int:
+    """Сверка источник↔приёмник (Фаза 48, U1/U9): каждый объект источника
+    должен присутствовать в приёмнике с теми же ключом и атрибутами.
+
+    --input — объекты источника (intermediate JSON, напр. extract.json),
+    --target — объекты приёмника (те же объекты, прочитанные из приёмника
+    после load — например extract из целевой ИБ). --objects — фильтр по
+    типу/группе (как в extract). --json — машиночитаемый отчёт для CI.
+    rc: 0 — полное совпадение, 1 — есть расхождения.
+    """
+    from .intermediate import load_json_batch
+    from .objects_filter import parse_objects, selects
+    from .verify import verify as _verify
+
+    try:
+        src_objs = load_json_batch(args.input)
+        tgt_objs = load_json_batch(args.target)
+    except (OSError, ValueError) as exc:
+        return _err(f'verify: не удалось прочитать объекты: {exc}')
+    if args.objects:
+        specs = parse_objects([s for s in args.objects.split(',') if s.strip()])
+
+        def _keep(o: dict[str, Any]) -> bool:
+            t = o.get('type', '') or ''
+            if '.' not in t:
+                return False
+            k, n = t.split('.', 1)
+            return selects(specs, k, n)
+
+        src_objs = [o for o in src_objs if _keep(o)]
+        tgt_objs = [o for o in tgt_objs if _keep(o)]
+    rep = _verify(src_objs, tgt_objs)
+    out: dict[str, object] = {
+        'ok': rep.full,
+        'total_source': rep.total_source,
+        'total_target': rep.total_target,
+        'matched': rep.matched,
+        'missing': rep.missing[:50],
+        'mismatched': rep.mismatched[:50],
+        'missing_total': len(rep.missing),
+        'mismatched_total': len(rep.mismatched),
+    }
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+    else:
+        print(f'verify: {rep.matched}/{rep.total_source} совпало '
+              f'(missing={len(rep.missing)}, mismatched={len(rep.mismatched)})')
+        for m in rep.missing[:10]:
+            print(f'  отсутствует: {m}')
+        for m in rep.mismatched[:10]:
+            print(f'  различается: {m}')
+    return 0 if rep.full else 1
+
+
+def cmd_rules_diff(args: argparse.Namespace) -> int:
+    """Сравнение двух правил TOON (Фаза 48): что изменилось между версиями
+    правил — объекты/атрибуты добавлены, удалены, изменены."""
+    try:
+        a: dict[str, Any] = json.loads(Path(args.a).read_text(encoding='utf-8'))
+        b: dict[str, Any] = json.loads(Path(args.b).read_text(encoding='utf-8'))
+    except (OSError, ValueError) as exc:
+        return _err(f'rules-diff: {exc}')
+    ao = {r['source']: r for r in (a.get('objects') or [])}
+    bo = {r['source']: r for r in (b.get('objects') or [])}
+    added = sorted(set(bo) - set(ao))
+    removed = sorted(set(ao) - set(bo))
+    changed = []
+    for name in sorted(set(ao) & set(bo)):
+        if ao[name] != bo[name]:
+            changed.append(name)
+    out = {'added': added, 'removed': removed, 'changed': changed,
+           'changed_total': len(changed)}
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+    else:
+        for name in added:
+            print(f'+ {name}')
+        for name in removed:
+            print(f'- {name}')
+        for name in changed:
+            print(f'~ {name}')
+        print(f'rules-diff: +{len(added)} -{len(removed)} ~{len(changed)}')
+    return 0
+
+
 def cmd_sonar_report(args: argparse.Namespace) -> int:
     """Отчёт ruff в sonar-формате (Фаза 28): --format xml|json, --target,
     --out — запись в файл для CI-артефакта."""
@@ -694,7 +779,7 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
 
 
 def cmd_cache(args: argparse.Namespace) -> int:
-    """Кеш: stats — статистика, clear — полная очистка (Фаза 18)."""
+    """Кеш: stats — статистика, trim — LRU-эвикция, clear — очистка (Фаза 18/48)."""
     from .cache import Cache
 
     c = Cache(Path(args.root_dir if getattr(args, 'root_dir', '') else '.onec_cache'))
@@ -702,6 +787,13 @@ def cmd_cache(args: argparse.Namespace) -> int:
     if action == 'clear':
         c.clear()
         print(json.dumps({'ok': True, 'action': 'clear'}))
+    elif action == 'trim':
+        removed = c.trim(max_bytes=getattr(args, 'max_bytes', None) or None,
+                         ttl_seconds=getattr(args, 'ttl', None) or None)
+        st = c.stats()
+        st['ok'] = True
+        st['removed'] = removed
+        print(json.dumps(st, ensure_ascii=False))
     else:
         st = c.stats()
         st['ok'] = True
@@ -817,6 +909,19 @@ def cmd_audit(args: argparse.Namespace) -> int:
         recs = [r for r in recs if args.obj in r['obj']]
     if args.tail:
         recs = recs[-args.tail:]
+    if getattr(args, 'csv_out', ''):  # комплаенс-выгрузка (Фаза 48)
+        import csv as _csv
+
+        out = Path(args.csv_out)
+        fields = ['ts', 'level', 'operation', 'obj', 'result', 'guid', 'rule']
+        with out.open('w', encoding='utf-8-sig', newline='') as f:
+            w = _csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
+            w.writeheader()
+            for r in recs:
+                w.writerow(r)
+        print(json.dumps({'ok': True, 'out': str(out), 'rows': len(recs)},
+                         ensure_ascii=False))
+        return 0
     counts: dict[str, int] = {}
     for r in recs:
         counts[r['level']] = counts.get(r['level'], 0) + 1
@@ -966,9 +1071,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser('doctor', help='Диагностика окружения (Фаза 17): зависимости/кеш')
 
-    p_cache = sub.add_parser('cache', help='Кеш: stats / clear (Фаза 18)')
+    p_cache = sub.add_parser('cache', help='Кеш: stats / trim / clear (Фаза 18/48)')
     p_cache.add_argument('sub', nargs='?', default='stats',
-                         choices=['stats', 'clear'])
+                         choices=['stats', 'trim', 'clear'])
+    p_cache.add_argument('--max-bytes', type=int, default=0,
+                         help='trim: целевой лимит размера кеша в байтах')
+    p_cache.add_argument('--ttl', type=int, default=0,
+                         help='trim: удалять файлы старше N секунд')
     p_cache.add_argument('--root-dir', default='', help='Каталог кеша')
 
     p_dump = sub.add_parser('dump-records',
@@ -995,6 +1104,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_audit.add_argument('--op', default='', help='extract|transform|load')
     p_audit.add_argument('--obj', default='', help='подстрока имени объекта')
     p_audit.add_argument('--tail', type=int, default=0, help='последние N записей')
+    p_audit.add_argument('--csv-out', default='',
+                         help='выгрузка фильтра в CSV (комплаенс, Фаза 48)')
 
     p_av = sub.add_parser('audit-verify',
                           help='Проверка tamper-evident цепочки журнала (Фаза 42)')
@@ -1070,6 +1181,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_ae.add_argument('--source-dir', required=True, help='ИБ-источник')
     p_ae.add_argument('--target-dir', required=True, help='ИБ-приёмник')
 
+    p_v = sub.add_parser('verify',
+                         help='Сверка источник↔приёмник (Фаза 48)')
+    p_v.add_argument('--input', required=True,
+                     help='объекты источника (intermediate JSON)')
+    p_v.add_argument('--target', required=True,
+                     help='объекты приёмника (intermediate JSON после load)')
+    p_v.add_argument('--objects', default='',
+                     help='фильтр по типу/группе (как в extract)')
+    p_v.add_argument('--json', action='store_true',
+                     help='машиночитаемый отчёт для CI')
+
+    p_rd = sub.add_parser('rules-diff',
+                          help='Сравнение двух правил TOON (Фаза 48)')
+    p_rd.add_argument('--a', required=True, help='правила v1 (rules.json)')
+    p_rd.add_argument('--b', required=True, help='правила v2 (rules.json)')
+    p_rd.add_argument('--json', action='store_true', help='JSON-отчёт')
+
     p_pii = sub.add_parser('pii-report',
                            help='Отчёт по анонимизации ПДн (152-ФЗ/152 УЗ, Фаза 37)')
     p_pii.add_argument('--audit-file', required=True,
@@ -1118,6 +1246,8 @@ def main(argv: list[str] | None = None) -> int:
         'mint-token': cmd_mint_token,
         'ai-map': cmd_ai_map,
         'ai-explain': cmd_ai_explain,
+        'verify': cmd_verify,
+        'rules-diff': cmd_rules_diff,
         'pii-report': cmd_pii_report,
         'shell': cmd_shell,
     }

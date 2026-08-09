@@ -539,14 +539,14 @@ _oAuth2 — реализовано) — в бэклог ниже. План ра�
 
 ## Фаза 48 — Связность CLI↔доки и доверие (0.31.0)
 
-- [ ] [fact] CLI `verify` (U1/U9): --source-dir/--target-dir/--objects/--sample,
-      --json-отчёт; README-рецепт полного цикла обновляется на реальную команду
-- [ ] [fact] `cache trim --max-bytes/--ttl` (U2/U10) + тесты LRU-эвикции через CLI
-- [ ] [fact] `audit export-csv` (U17) — комплаенс-выгрузка журнала
-- [ ] [fact] `rules diff --a --b` (U18) — сравнение правил TOON
-- [ ] [fact] контракт-тест docs/commands-map.md ↔ CLI (U45) — дрейф ловится в воротах
-- [ ] [fact] тесты verify-команды (U46)
-- [ ] [assumption] ворота зелёные; релиз 0.31.0
+- [x] [fact] CLI `verify` (U1/U9): --input/--target/--objects/--json;
+      README-рецепт полного цикла обновлён на реальную команду
+- [x] [fact] `cache trim --max-bytes/--ttl` (U2/U10) + тесты LRU-эвикции через CLI
+- [x] [fact] `audit --csv-out` (U17) — комплаенс-выгрузка журнала
+- [x] [fact] `rules-diff --a --b` (U18) — сравнение правил TOON
+- [x] [fact] контракт-тест docs/commands-map.md ↔ CLI/MCP (U45)
+- [x] [fact] тесты verify-команды (U46)
+- [x] [assumption] ворота зелёные; релиз 0.31.0
 
 ## Фаза 49 — Память и потоковость (0.32.0)
 

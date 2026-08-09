@@ -30,9 +30,13 @@ onec-converter load --http http://<server>/loader/hs \
 
 ## 5. Проверка целостности приёмника
 ```bash
-onec-converter verify --source-dir ./stand --target-dir ./tgt_ib \
-    --objects "Справочник.Контрагенты" --sample 1000
-# сверка GUID/ключей по выборке; отчёт {ok, mismatches, ...}
+# прочитать объекты из приёмника и сверить с источником (Фаза 48)
+onec-converter extract --source-dir ./tgt_ib --out tgt_read.json \
+    --objects "Справочник.Контрагенты"
+onec-converter verify --input extract.json --target tgt_read.json \
+    --objects "Справочник.Контрагенты"
+# rc=0 — полное совпадение (ключ+атрибуты); --json — отчёт для CI
+# {ok, total_source, total_target, matched, missing, mismatched}
 ```
 
 ## 6. Аудит «кто/что/когда»

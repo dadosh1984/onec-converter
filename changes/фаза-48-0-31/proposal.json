@@ -1,0 +1,16 @@
+{
+  "title": "фаза-48-0-31",
+  "goal": "Фаза 48 (0.31.0) — связность CLI↔доки и доверие (раунд 5): (1) CLI verify (--input/--target/--objects/--json, rc=0 при полном совпадении) + обновлённый рецепт полного цикла на реальную команду; (2) cache trim --max-bytes/--ttl (LRU Cache.trim); (3) audit --csv-out (utf-8-sig); (4) rules-diff --a --b (+/-/~, --json); (5) контракт-тест docs/commands-map.md ↔ CLI/MCP (U45); (6) тесты verify (U46). Реестр 26->28. Тесты +6 в tests/test_phase48_cli_link.py. CHANGELOG 0.31.0, план ✅, релиз.",
+  "platform": "тесты в E:\\test через gates.sh; версия 0.31.0; реестр CLI 26->28 (verify, rules-diff)",
+  "constraints": "compact",
+  "budget": "compact",
+  "clarity": "vague",
+  "language": "ru",
+  "appliesLessons": [
+    "фазу-23-conformance-тесты:forge:753265ca3073",
+    "фазу-25-audit-логирование:forge:7c216dc57da7",
+    "фазу-24-полный-сценарий:forge:1b6dbaa2498b",
+    "фаза-11-новая-порция:forge:537c39f668a9",
+    "фаза-32-0-15:forge:c7ae2cc67289"
+  ]
+}
