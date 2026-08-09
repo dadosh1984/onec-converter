@@ -351,13 +351,12 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 - [x] [assumption] ворота зелёные; релиз 0.25.0
 ## Фаза 43 — SQL-источники до production-grade (0.26.0)
 
-- [ ] [fact] _connect(): connect_timeout (не зависать на недоступном сервере)
-- [ ] [fact] fetch_rows(): потоковая выборка (fetchmany/server-side cursor) вместо fetchall
-- [ ] [fact] README «SQL-источники: ограничения» + honest contract в docs/openapi.yaml
-- [ ] [fact] интеграционный тест PostgreSQL в Docker (реальная СУБД) в CI
-- [ ] [fact] col_sql fetch_metadata: скобки/экранирование (AND/OR приоритет)
-- [ ] [assumption] ворота зелёные; релиз 0.26.0
-
+- [x] [fact] _connect(): connect_timeout (не зависать на недоступном сервере)
+- [x] [fact] fetch_rows(): потоковая выборка (fetchmany/server-side cursor) вместо fetchall
+- [x] [fact] README «SQL-источники: ограничения» + honest contract в docs/openapi.yaml
+- [x] [fact] интеграционный тест PostgreSQL в Docker (реальная СУБД) в CI
+- [x] [fact] col_sql fetch_metadata: скобки/экранирование (AND/OR приоритет)
+- [x] [assumption] ворота зелёные; релиз 0.26.0
 ## Фаза 44 — Покрытие и качество (0.27.0)
 
 - [ ] [fact] COVERAGE_MODULES в pyproject.toml; расширить на audit/clone_db/health/s3_client/sql_source/ai_skills

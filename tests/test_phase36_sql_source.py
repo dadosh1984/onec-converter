@@ -25,6 +25,11 @@ class FakeCursor:
     def fetchall(self):
         return self._rows
 
+    def fetchmany(self, size=1):
+        rows = self._rows[:size]
+        self._rows = self._rows[size:]
+        return rows
+
     def close(self):
         pass
 

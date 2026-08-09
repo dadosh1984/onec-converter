@@ -52,3 +52,54 @@ jobs:
       - name: docker run smoke
         run: docker run --rm onec-converter:ci --version
         if: matrix.python == '3.11'
+
+  sql-pg:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: onectest
+          POSTGRES_DB: onectest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install deps
+        run: |
+          pip install -e ".[dev]"
+          pip install psycopg2-binary
+
+      - name: Seed v8 tables (minimal 1С-структура)
+        env:
+          PGPASSWORD: onectest
+        run: |
+          psql -h localhost -U postgres -d onectest <<'SQL'
+          CREATE TABLE "_Reference1" ("_IDRREF" bytea PRIMARY KEY,
+                                       "_Code" varchar(9),
+                                       "_Description" varchar(150));
+          INSERT INTO "_Reference1" ("_IDRREF", "_Code", "_Description")
+          VALUES (decode('0100000000000000000000000000000000', 'hex'),
+                  '0001', 'Банк А');
+          SQL
+
+      - name: pytest sql_source (реальный PostgreSQL)
+        run: |
+          mkdir -p /tmp/onec-pgtest
+          python -m pytest tests/test_phase43_sql_pg.py -q \
+            --basetemp=/tmp/onec-pgtest
+        env:
+          ONEC_TEST_PG_DSN: >-
+            dbname=onectest user=postgres password=onectest host=localhost port=5432

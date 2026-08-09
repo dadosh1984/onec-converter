@@ -102,6 +102,11 @@ class _SpyCursor:
     def fetchall(self):
         return self._rows
 
+    def fetchmany(self, size=1):
+        rows = self._rows[:size]
+        self._rows = self._rows[size:]
+        return rows
+
     def close(self):
         pass
 
@@ -130,22 +135,22 @@ class _SpyDriver:
 
 def test_sql_fetch_rows_quotes_and_rejects_injection():
     src = GenericSqlSource('postgres', 'dsn', _SpyDriver([(1,)]))
-    rows = src.fetch_rows('_Reference7')
+    rows = list(src.fetch_rows('_Reference7'))  # генератор — потребляем
     conn = src._connect()
     assert conn._cur.executed == ['SELECT * FROM "_Reference7"']
-    assert list(rows) == [{'table_name': 1}]
+    assert rows == [{'table_name': 1}]
 
     with pytest.raises(SqlSourceError, match='недопустимое имя таблицы'):
-        src.fetch_rows('_Reference7; DROP TABLE t')
+        list(src.fetch_rows('_Reference7; DROP TABLE t'))
 
     with pytest.raises(SqlSourceError, match='недопустимое имя таблицы'):
-        src.fetch_rows('x y')
+        list(src.fetch_rows('x y'))
     src.close()
 
 
 def test_sql_fetch_rows_mssql_quoting():
     src = GenericSqlSource('mssql', 'dsn', _SpyDriver([]))
-    src.fetch_rows('_InfoRg10')
+    list(src.fetch_rows('_InfoRg10'))
     assert src._connect()._cur.executed == ['SELECT * FROM [_InfoRg10]']
     src.close()
 

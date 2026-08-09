@@ -91,20 +91,26 @@ class GenericSqlSource:
         'Перечисление': '_Enum',
     }
 
-    def __init__(self, kind: str, dsn: str, driver: Any) -> None:
+    def __init__(self, kind: str, dsn: str, driver: Any,
+                 connect_timeout: int = 10) -> None:
         self.kind = kind
         self.dsn = dsn
         self._driver = driver
+        self._connect_timeout = connect_timeout
         self._conn: Any = None
 
     def _connect(self) -> Any:
         if self._conn is None:
             exc = None
+            kw = ({'connect_timeout': self._connect_timeout}
+                  if self.kind == 'postgres' else
+                  {'timeout': self._connect_timeout})
             for _ in range(2):
                 try:
-                    if self.kind == 'postgres':
-                        self._conn = self._driver.connect(self.dsn)
-                    else:
+                    try:
+                        self._conn = self._driver.connect(self.dsn, **kw)
+                    except TypeError:
+                        # драйвер/мок без поддержки таймаута подключения
                         self._conn = self._driver.connect(self.dsn)
                     break
                 except Exception as e:  # noqa: BLE001 — retry-обёртка
@@ -190,8 +196,37 @@ class GenericSqlSource:
             return f'"{name}"'
         return f'[{name}]'
 
-    def fetch_rows(self, table: str) -> Iterable[dict[str, Any]]:
-        return self._q(f'SELECT * FROM {self._quote_ident(table)}')
+    def fetch_rows(self, table: str,
+                   batch_size: int = 1000) -> Iterable[dict[str, Any]]:
+        """Потоковая выборка строк таблицы (fetchmany, без fetchall).
+
+        Для postgres использует серверный курсор (psycopg2 named cursor),
+        чтобы миллионы строк не грузились в память клиента; MSSQL-драйвер
+        без серверных курсоров — всё равно выдаёт строки порциями.
+        """
+        ident = self._quote_ident(table)
+        conn = self._connect()
+        cur = self._stream_cursor(conn)
+        try:
+            cur.execute(f'SELECT * FROM {ident}')
+            cols = [d[0] for d in cur.description or []]
+            while True:
+                batch = cur.fetchmany(batch_size)
+                if not batch:
+                    break
+                for r in batch:
+                    yield dict(zip(cols, r))
+        finally:
+            cur.close()
+
+    def _stream_cursor(self, conn: Any) -> Any:
+        """Серверный курсор для postgres; fallback на обычный при отказе."""
+        if self.kind == 'postgres':
+            try:
+                return conn.cursor(name='onec_stream')
+            except TypeError:
+                pass  # мок/драйвер без именованных курсоров
+        return conn.cursor()
 
     # ---- intermediate-совместимый чтение строк ----
     def read_objects(self) -> Iterable[dict[str, Any]]:
