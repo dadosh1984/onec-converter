@@ -298,7 +298,6 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
             'snapshot': str(snap_path) if snap_path else None}
 
 
-
 def _cleanup_workfiles(wd: Path, keep: Path | None = None) -> None:
     """Удалить work-файлы; финальный 1Cv8.1CD не трогается."""
     for p in wd.glob('work*.1CD'):
