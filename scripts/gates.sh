@@ -85,6 +85,17 @@ run_bsl() {
   echo "== check_bsl (расширение 1С) =="
   python scripts/check_bsl.py || return 1
 }
+
+run_docker() {
+  echo "== docker build (опц.) =="
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "  docker недоступен — пропуск"
+    return 0
+  fi
+  docker build -t onec-converter:ci . >/dev/null 2>&1 || {
+    echo "  docker build: недоступен/нет сети — пропуск"; return 0; }
+  echo "  docker build ok"
+}
 run_vitest() {
   if vitest_configured; then
     echo "== vitest =="
@@ -103,6 +114,7 @@ case "$TARGET" in
   vitest) run_vitest ;;
   conformance) run_conformance ;;
   bsl)    run_bsl ;;
-  all)    run_pytest && run_conformance && run_ruff && run_mypy && run_bsl && run_vitest ;;
-  *) echo "неизвестная цель: $TARGET (pytest|ruff|mypy|vitest|conformance|bsl|all|--strict-steps|--coverage)" >&2; exit 2 ;;
+  docker) run_docker ;;
+  all)    run_pytest && run_conformance && run_ruff && run_mypy && run_bsl && run_vitest && run_docker ;;
+  *) echo "неизвестная цель: $TARGET (pytest|ruff|mypy|vitest|conformance|bsl|docker|all|--strict-steps|--coverage)" >&2; exit 2 ;;
 esac

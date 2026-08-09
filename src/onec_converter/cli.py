@@ -672,12 +672,15 @@ def _jsonable(v: Any) -> Any:
 
 
 def cmd_metrics(_args: argparse.Namespace) -> int:
-    """Метрики в формате Prometheus (Фаза 21): кеш, операции."""
+    """Метрики в формате Prometheus (Фаза 21/38): кеш, операции, прогресс."""
     from .cache import Cache
     from .metrics import render_from_timings
+    from .progress import get_progress
     from .timings import Timings
 
-    print(render_from_timings(Timings().snapshot(), Cache().stats()))
+    base = render_from_timings(Timings().snapshot(), Cache().stats())
+    print(base)
+    print(get_progress().render_prometheus())
     return 0
 
 

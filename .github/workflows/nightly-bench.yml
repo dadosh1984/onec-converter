@@ -1,0 +1,30 @@
+name: nightly-bench
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        run: |
+          pip install -e .
+          pip install pytest
+
+      - name: Run benchmark
+        run: python scripts/benchmark.py /tmp/onec_bench
+
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark
+          path: /tmp/onec_bench

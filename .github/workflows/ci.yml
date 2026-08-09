@@ -48,3 +48,7 @@ jobs:
       - name: docker build (образ)
         run: docker build -t onec-converter:ci .
         if: matrix.python == '3.11'
+
+      - name: docker run smoke
+        run: docker run --rm onec-converter:ci --version
+        if: matrix.python == '3.11'

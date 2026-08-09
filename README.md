@@ -186,8 +186,18 @@ onec-converter load ... --notify-telegram token:chat_id   # Telegram-бот
 ```
 `base_health` (MCP) — «здоровье базы»: версия ИБ, число таблиц/строк,
 lock-файлы (1Cv8.1CL/1Cv8tmp*), свободное место. `dump-report` — экспорт
-отчётов в S3 через авторский SigV4-клиент (endpoint — для MinIO/Yandex).
+отчётов в S3 через авторский SigV4-клиент (endpoint — для MinIO/Yandex);
+для больших файлов используется multipart-upload (Фаза 38).
 Уведомления — best-effort: сбой доставки не ломает загрузку.
+
+**Прогресс переноса (Фаза 38).** `onec-converter metrics` выводит Prometheus-
+метрики прогресса: обработано строк/объектов, ошибки, объёмы, скорость
+(строк/сек) — для Grafana/дашборда.
+
+**Docker / Compose (Фаза 38).** Цель `docker` в `scripts/gates.sh` собирает
+образ локально; CI делает `docker run --rm onec-converter:ci --version`
+(smoke). `docker-compose.yml` — готовый пример связки onec-converter + MinIO
+для S3-экспорта: `docker compose up -d`.
 
 ### techlog — техжурнал 1С как источник (Фаза 26)
 ```

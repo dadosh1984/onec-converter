@@ -3,6 +3,18 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.21.0 (2026-08)
+
+### Мониторинг и DevOps (Фаза 38)
+- progress.py: WorkflowProgress (строки/объекты/ошибки/объёмы/строк-сек);
+  `metrics` выводит Prometheus-метрики прогресса.
+- s3_client.multipart_upload: create/upload_part/complete (SigV4) для
+  больших отчётов, abort при сбое; <= chunk_size делегирует put_object.
+- gates.sh: цель `docker` (build, опц.); ci.yml — docker run smoke.
+- docker-compose.yml: пример onec-converter + MinIO для S3-экспорта.
+- nightly-bench workflow + scripts/benchmark.py (fake-база, время/скорость).
+- Ворота: pytest (+5), conformance, ruff, mypy (49), check_bsl, vitest.
+
 ## 0.20.0 (2026-08)
 
 ### Безопасность и комплаенс (Фаза 37)

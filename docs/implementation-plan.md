@@ -307,14 +307,12 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 - [x] [assumption] ворота зелёные; релиз 0.20.0
 ## Фаза 38 — Мониторинг и DevOps (0.21.0)
 
-- [ ] [fact] prometheus_exporter: строк/сек, ошибки, объёмы (кроме
-      metrics.py — добавить историю/счётчики переноса)
-- [ ] [fact] s3_client: multipart upload для больших отчётов
-- [ ] [fact] docker build — цель gates.sh; docker run smoke в ci.yml
-- [ ] [fact] docker-compose пример: onec-converter + MinIO
-- [ ] [fact] nightly-bench: бенчмарк парсинга на каждой новой версии
-- [ ] [assumption] ворота зелёные; релиз 0.21.0
-
+- [x] [fact] progress.py + metrics: строки/объекты/ошибки/скорость в Prometheus
+- [x] [fact] s3 multipart_upload (create/parts/complete/abort, SigV4)
+- [x] [fact] gates.sh цель docker (опц.); ci.yml docker run smoke
+- [x] [fact] docker-compose.yml (onec-converter + MinIO)
+- [x] [fact] nightly-bench workflow + scripts/benchmark.py
+- [x] [assumption] ворота зелёные; релиз 0.21.0
 ## Фаза 39 — DX и продукт (0.22.0)
 
 - [ ] [fact] --dry-run глобально для записывающих команд (emulation)
