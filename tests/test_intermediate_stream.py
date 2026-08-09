@@ -28,4 +28,16 @@ def test_stream_rejects_no_first_objects(tmp_path: Path):
     p = tmp_path / 'empty.json'
     save_json_stream(iter([]), p)
     assert list(load_json_stream(p)) == []
-    assert load_json_batch(p) == []
+
+
+def test_stream_encodes_bytes_fields(tmp_path: Path):
+    """BLOB-поля 1С (bytes) должны сериализоваться без исключения (base64)."""
+    objs = [{'type': 'Таблица._X', 'key': ['0'],
+             'attributes': {'Картинка': b'\x89PNG\x00', 'BLOB': bytes(range(256))}}]
+    p = tmp_path / 'blob.json'
+    save_json_batch(objs, p)
+    save_json_stream(iter(objs), tmp_path / 'blob_stream.json')
+    loaded = load_json_batch(p)
+    import base64
+    assert loaded[0]['attributes']['Картинка'] == base64.b64encode(b'\x89PNG\x00').decode('ascii')
+    assert list(load_json_stream(tmp_path / 'blob_stream.json'))[0] == loaded[0]

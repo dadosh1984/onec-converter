@@ -168,6 +168,8 @@ def test_decode_helpers():
     assert decode_numeric(bytes.fromhex('00000020'), 6, 0) == -2
     assert decode_datetime(enc_datetime('20240115093045')) == datetime(2024, 1, 15, 9, 30, 45)
     assert decode_datetime(b'\x00' * 7) is None
+    # Заглушка 1С: год 0100, месяц/день 00 — некорректная дата -> None, не exception
+    assert decode_datetime(bytes.fromhex('01000000000000')) is None
     assert bin_to_guid(bytes.fromhex('0102030405060708090a0b0c0d0e0f10')) == \
         '01020304-0506-0708-090a-0b0c0d0e0f10'
 

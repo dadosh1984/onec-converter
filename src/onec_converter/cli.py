@@ -128,22 +128,35 @@ def _extract_77(source_dir: str, encoding: str, limit: int,
 
 
 def _extract_8x(source_dir: str, limit: int,
-                specs: list[ObjectSpec], workers: int = 1) -> list[dict[str, Any]]:
+                specs: list[ObjectSpec], workers: int = 1,
+                named: bool = False) -> list[dict[str, Any]]:
     """8.x: без фильтра — все таблицы (совместимость); с фильтром — только
     таблицы выбранных объектов конфигурации (read_metadata: kind+имя) или
     физические таблицы через `Таблица.*`. При workers>1 — параллельное
-    чтение независимых таблиц (порядок строк сохраняется)."""
+    чтение независимых таблиц (порядок строк сохраняется).
+
+    named=True — объекты конфигурационных таблиц получают тип `kind.имя`
+    и атрибуты с именами реквизитов (поле `field` -> имя из метаданных),
+    чтобы правила TOON по именам объектов (migrate --rules) сопоставлялись.
+    """
     from .source_8x_file import Database1CD, FormatError, read_metadata, read_table
     cd = Path(source_dir) / '1Cv8.1CD'
     with Database1CD(cd) as db:
         names = sorted(db.tables)
     # маппинг физическая таблица -> (kind, имя) объекта конфигурации
     meta_by_table: dict[str, tuple[str, str]] = {}
-    if specs:
+    # маппинг физическая таблица -> {field: имя реквизита} (для named)
+    field_names_by_table: dict[str, dict[str, str]] = {}
+    if named or specs:
         try:
             for o in read_metadata(cd)['objects']:
                 if o.get('table'):
                     meta_by_table[o['table']] = (o['kind'], o['name'])
+                    if named and o.get('attributes'):
+                        field_names_by_table[o['table']] = {
+                            a['field']: a['name']
+                            for a in o['attributes'] if a.get('field')
+                        }
         except FormatError:
             # база без метаданных (синтетика): только физический фильтр Таблица.*
             pass
@@ -171,14 +184,33 @@ def _extract_8x(source_dir: str, limit: int,
     def _rows(name: str) -> list[dict[str, Any]]:
         nonlocal counter
         out: list[dict[str, Any]] = []
+        info = meta_by_table.get(name)
+        fnames = field_names_by_table.get(name, {})
         for i, rec in enumerate(read_table(cd, name)):
-            out.append({
-                OBJ_TYPE: f'Таблица.{name}',
-                OBJ_ID: str(i),
-                OBJ_KEY: [],
-                OBJ_ATTRS: rec,
-                OBJ_REFS: {},
-            })
+            if named and info:
+                kind, obj_name = info
+                attrs: dict[str, Any] = {}
+                for fname, val in rec.items():
+                    # только реквизиты с человеко-читаемым именем (не _FldNNN/_OWNERID)
+                    aname = fnames.get(fname)
+                    if aname and not aname.startswith('_'):
+                        attrs[aname] = val
+                attrs.pop('Ссылка', None)
+                out.append({
+                    OBJ_TYPE: f'{kind}.{obj_name}',
+                    OBJ_ID: str(rec.get('_IDRRef', i)),
+                    OBJ_KEY: [str(v) for v in [rec.get('_CODE'), rec.get('_IDRRef')] if v is not None],
+                    OBJ_ATTRS: attrs,
+                    OBJ_REFS: {},
+                })
+            else:
+                out.append({
+                    OBJ_TYPE: f'Таблица.{name}',
+                    OBJ_ID: str(i),
+                    OBJ_KEY: [],
+                    OBJ_ATTRS: rec,
+                    OBJ_REFS: {},
+                })
             with lock:
                 if limit and counter >= limit:
                     return out
@@ -1238,12 +1270,12 @@ def cmd_audit_verify(args: argparse.Namespace) -> int:
 # ---- Фаза 56: CLI-пайплайн migrate + wizard ----------------
 
 def _extract_for_migrate(source_dir: str, encoding: str, specs: list[Any],
-                         workers: int) -> list[dict[str, Any]]:
+                         workers: int, named: bool = False) -> list[dict[str, Any]]:
     """Извлечение объектов для migrate: оба формата 7.7/8.x."""
     ver = _detect_version(source_dir)
     if ver == '77':
         return _extract_77(source_dir, encoding, 0, specs)
-    return _extract_8x(source_dir, 0, specs, workers=workers)
+    return _extract_8x(source_dir, 0, specs, workers=workers, named=named)
 
 
 def cmd_migrate(args: argparse.Namespace) -> int:
@@ -1263,7 +1295,8 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     encoding = args.source_encoding or cfg.source_encoding or 'cp866'
     t0 = time.perf_counter()
     try:
-        objs = _extract_for_migrate(str(src), encoding, [], args.workers)
+        objs = _extract_for_migrate(str(src), encoding, [], args.workers,
+                                     named=bool(args.rules))
     except CLIError as exc:
         return _err(str(exc))
     if not objs:

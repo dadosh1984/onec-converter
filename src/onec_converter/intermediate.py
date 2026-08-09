@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
@@ -54,12 +55,20 @@ def to_xml(obj: dict[str, Any]) -> str:
 
 
 def save_json_batch(objects: list[dict[str, Any]], path: str | Path) -> None:
-    Path(path).write_text(json.dumps(objects, ensure_ascii=False, indent=1), encoding='utf-8')
+    Path(path).write_text(json.dumps(objects, ensure_ascii=False, indent=1,
+                                      default=_json_default), encoding='utf-8')
 
 
 def load_json_batch(path: str | Path) -> list[dict[str, Any]]:
     data: list[dict[str, Any]] = json.loads(Path(path).read_text(encoding='utf-8'))
     return data
+
+
+def _json_default(o: Any) -> Any:
+    """Сериализация нестандартных типов 1С: bytes (BLOB/хранение) -> base64."""
+    if isinstance(o, bytes):
+        return base64.b64encode(o).decode('ascii')
+    raise TypeError(f'Object of type {type(o).__name__} is not JSON serializable')
 
 
 def save_json_stream(objects: Iterable[dict[str, Any]], path: str | Path,
@@ -68,7 +77,7 @@ def save_json_stream(objects: Iterable[dict[str, Any]], path: str | Path,
 
     Не накапливает все объекты в памяти — подходит для больших баз без OOM.
     Формат: '[{{...}},\n{{...}}]' — валидный JSON-массив (совместим с
-    load_json_batch).
+    load_json_batch). bytes-поля кодируются в base64 (_json_default).
     """
     p = Path(path)
     with p.open('w', encoding='utf-8') as f:
@@ -77,7 +86,7 @@ def save_json_stream(objects: Iterable[dict[str, Any]], path: str | Path,
         for obj in objects:
             if not first:
                 f.write(',\n')
-            f.write(json.dumps(obj, ensure_ascii=False))
+            f.write(json.dumps(obj, ensure_ascii=False, default=_json_default))
             first = False
         f.write(']')
 

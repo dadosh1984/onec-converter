@@ -3,11 +3,18 @@
 Лёгкий трекер строк/ошибок при extract/load в единицу времени. Не пишет
 файл — это чистые счётчики в памяти для экспорта в Prometheus через
 `metrics` или для дашборда. Код авторский.
+
+Плюс визуальный progress-бар в терминале (stderr, не ломает JSON stdout):
+`TermProgress` рисует процент, число перенесённых объектов и текущую таблицу,
+а по завершении — сводку таблиц приёмника.
 """
 from __future__ import annotations
 
+import shutil
+import sys
 import time
 from dataclasses import dataclass, field
+from typing import Any, TextIO
 
 
 @dataclass
@@ -89,3 +96,84 @@ def get_progress() -> WorkflowProgress:
 def reset_progress() -> None:
     global _active
     _active = None
+
+
+# ---------------------------------------------------------------------------
+# Визуальный progress-бар переноса (stderr)
+# ---------------------------------------------------------------------------
+
+_BAR_WIDTH = 32
+_EMOJI = {'Справочник': '📚', 'Документ': '📄', 'РегистрСведений': '🗂️',
+          'РегистрНакопления': '📊', 'РегистрБухгалтерии': '🧮',
+          'Перечисление': '🏷️', 'ПланСчетов': '🧾', 'Таблица': '📦'}
+
+
+def _tty(out: TextIO) -> bool:
+    return bool(getattr(out, 'isatty', lambda: False)())
+
+
+class TermProgress:
+    """Прогресс переноса: объекты, таблицы, процент.
+
+    draw() вызывается после каждого пакета(объекта). Учитывается stderr
+    и TTY/последовательный вывод. В не-TTY выводится компактная строка,
+    в TTY — перезаписывается \\r.
+    """
+
+    def __init__(self, total: int, out: TextIO | None = None):
+        self.total = max(total, 1)
+        self.done = 0
+        self.tables: dict[str, int] = {}
+        self._out = out or sys.stderr
+        self._tty = _tty(self._out)
+        self._width = _bar_width()
+
+    def update(self, obj_type: str = '', table: str = '', rows: int = 1) -> None:
+        """Сообщить о переносе N записей (по умолчанию 1) в таблицу."""
+        if table:
+            self.tables[table] = self.tables.get(table, 0) + rows
+        self.done += rows
+
+    def _kind_of(self, obj_type: str) -> str:
+        return (obj_type.split('.', 1)[0] if obj_type else 'Таблица')
+
+    def _bar(self, pct: int) -> str:
+        filled = round(pct / 100 * self._width)
+        return '█' * filled + '░' * (self._width - filled)
+
+    def draw(self, obj_type: str = '', table: str = '') -> None:
+        pct = self.done * 100 // self.total
+        if self._tty:
+            bar = self._bar(pct)
+            kind_icon = _EMOJI.get(self._kind_of(obj_type), '')
+            line = (f'\r{kind_icon} {bar} {pct:3d}% '
+                    f'{self.done}/{self.total} '
+                    f'[{table or obj_type or ""}]')
+            self._out.write(line + '\x1b[K')
+            self._out.flush()
+        else:
+            if self.done == 1 or self.done == self.total or pct % 10 == 0:
+                line = (f'[onec-converter] перенос: {pct}% '
+                        f'({self.done}/{self.total}) '
+                        f'[{table or obj_type or ""}]')
+                self._out.write(line + '\n')
+                self._out.flush()
+
+    def finish(self, report: dict[str, Any] | None = None, ok: bool = True) -> None:
+        if self._tty:
+            self._out.write('\r' + ' ' * 100 + '\r')
+        for table, n in sorted(self.tables.items(), key=lambda i: -i[1]):
+            self._out.write(f'  {table}: {n} записей\n')
+        status = '✓ перенос завершён' if ok else '✘ перенос прерван'
+        self._out.write(f'{status}\n')
+        if report is not None:
+            self._out.write(f'  итого: {report.get("total", self.done)} объектов'
+                            f', tables={len(self.tables)}\n')
+        self._out.flush()
+
+
+def _bar_width() -> int:
+    try:
+        return max(shutil.get_terminal_size((80, 24)).columns // 3, 20)
+    except Exception:  # noqa: BLE001 — негарантированный терминал
+        return _BAR_WIDTH

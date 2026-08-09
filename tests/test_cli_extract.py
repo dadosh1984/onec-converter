@@ -162,3 +162,20 @@ def test_extract_8x_objects_group_on_real_base():
     # служебные таблицы (вне конфигурации) группой не выбираются
     assert not selects(specs, 'Таблица', '_REFS', table='_REFS')
     assert not selects(specs, 'Таблица', '_USERPASSWORD', table='_USERPASSWORD')
+
+
+def test_extract_8x_named_types_real_base():
+    """named=True: конфигурационные таблицы получают тип `kind.имя`
+    (совместимо с правилами TOON migrate --rules), а не `Таблица.*`."""
+    from onec_converter.cli import _extract_8x
+    base_dir = Path(BASE_81).parent  # _extract_8x ждёт каталог с 1Cv8.1CD
+    objs = _extract_8x(str(base_dir), 0, [], workers=1, named=True)
+    named_types = {o['type'] for o in objs if o['type'].startswith('Справочник.')}
+    table_types = {o['type'] for o in objs if o['type'].startswith('Таблица.')}
+    assert named_types, 'named-режим должен давать типы Справочник.<имя>'
+    assert table_types  # служебные/вне-конфигурационные остаются Таблица.*
+    # хотя бы один справочник имеет реквизиты по именам (не физические _FldNNN)
+    n = next(o for o in objs if o['type'].startswith('Справочник.'))
+    attrs = n['attributes'] or {}
+    assert not any(k.startswith('_') for k in attrs), attrs
+    assert 'Код' in attrs or 'Наименование' in attrs or 'Ссылка' in attrs

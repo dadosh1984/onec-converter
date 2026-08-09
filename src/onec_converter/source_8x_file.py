@@ -138,10 +138,17 @@ def decode_numeric(buf: bytes, length: int, precision: int) -> int | float:
 
 
 def decode_datetime(buf: bytes) -> datetime | None:
-    """DT: 7 байт YYYYMMDDHHMMSS; нули = None. Даты 1С без часового пояса."""
+    """DT: 7 байт YYYYMMDDHHMMSS; нули = None. Даты 1С без часового пояса.
+
+    В 1С дата-заглушка может содержать невалидные компоненты
+    (например 0100-00-00 00:00:00) — возвращаем None, а не exception.
+    """
     if len(buf) < 7 or buf[:2] == b'\x00\x00':
         return None
-    return datetime.strptime(buf[:7].hex(), '%Y%m%d%H%M%S')
+    try:
+        return datetime.strptime(buf[:7].hex(), '%Y%m%d%H%M%S')
+    except ValueError:
+        return None
 
 
 def decode_field(fdef: FieldDef, buf: bytes) -> Any:
@@ -720,9 +727,26 @@ _TABLE_PREFIX: dict[str, str] = {
     'CKinds': 'CKINDS', 'VT': 'VT',
 }
 
+
+def _lookup_table(tables: Mapping[str, TableDef], canonical: str) -> str:
+    """Фактическое имя таблицы из dict `tables`, нечувствительно к регистру.
+
+    Каноническое имя (header-регистр, напр. `_DOCUMENT625`) может не совпасть
+    с физическим (TitleCase `_Document625`) в базах 8.3. Возвращает ключ
+    (фактическое имя) или '' при отсутствии.
+    """
+    if not canonical:
+        return ''
+    if canonical in tables:
+        return canonical
+    low = canonical.lower()
+    for k in tables:
+        if k.lower() == low:
+            return k
+    return ''
+
 # Приоритет kind из DBNames при дублях GUID: основная таблица важнее
 # служебных (таблицы изменений, полей, индексов). 8.3 пишет для одного GUID
-# и "Reference",74, и "ReferenceChngR",1731 — выбираем основную.
 _DBNAME_PRIORITY: dict[str, int] = {
     'Reference': 100, 'Document': 100, 'Enum': 100, 'InfoRg': 100,
     'AccumRg': 100, 'Acc': 100, 'CKinds': 100, 'VT': 100, 'Const': 100,
@@ -1020,7 +1044,12 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
                 db_kind, num = binding
                 prefix = _TABLE_PREFIX.get(db_kind)
                 table_name = f'_{prefix}{num}' if prefix else ''
-                table = db.tables.get(table_name)
+                # физические имена таблиц 8.3 могут отличаться по регистру
+                # (TitleCase: _Document625), а каноническое — верхний регистр
+                actual = _lookup_table(db.tables, table_name)
+                table = db.tables.get(actual) if actual else None
+                if actual:
+                    table_name = actual
                 attrs: list[dict[str, Any]] = []
                 if table is not None:
                     for fname, fdef in table.fields.items():

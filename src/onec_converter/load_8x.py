@@ -202,6 +202,9 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
     md = read_metadata(cp)
     # meta index: 'Справочник.X' -> {table, ...}
     index = {f"{o['kind']}.{o['name']}": o for o in md.get('objects', [])}
+    # прогресс переноса в терминале (stderr, не ломает JSON stdout)
+    from .progress import TermProgress
+    progress = TermProgress(len(objects))
     rows_by_table: dict[str, list[bytes]] = {}
     prefix_by_table: dict[str, bytes] = {}
     idref_counter: dict[str, int] = {}
@@ -248,6 +251,8 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
             row = object_to_row(table, fm, obj, idref,
                                 ref_index=ref_index, references=references)
             rows_by_table.setdefault(table_name, []).append(row)
+            progress.update(obj_type, table_name, rows=1)
+            progress.draw(obj_type, table_name)
             _ref_report(obj_type, references, ref_index, meta, ref_warnings)
             # табличные части (Фаза 15)
             for ts in (obj.get('tab_sections') or {}).values():
@@ -293,6 +298,7 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
                                 idref_counter)
     get_audit().info('load', obj=str(len(objects)), result='ok',
                      detail=f'total={len(objects)} tables={tables_stat}')
+    progress.finish({'total': len(objects)}, ok=True)
     return {'ok': True, 'copy_path': str(final), 'total': len(objects),
             'tables': tables_stat, 'ref_warnings': ref_warnings, 'verify': report,
             'snapshot': str(snap_path) if snap_path else None}
