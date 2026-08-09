@@ -550,8 +550,10 @@ def cmd_sonar_report(args: argparse.Namespace) -> int:
 
 def cmd_dump_report(args: argparse.Namespace) -> int:
     """Экспорт отчёта в S3 (Фаза 27): файл JSON/XLSX -> bucket
-    через минимальный SigV4-клиент (--endpoint для S3-совместимых)."""
-    from .s3_client import S3Error, put_object
+    через минимальный SigV4-клиент (--endpoint для S3-совместимых).
+    Файл загружается потоково (upload_file, Фаза 49 U36) — не читается
+    целиком в память."""
+    from .s3_client import S3Error, upload_file
 
     f = Path(args.file)
     if not f.is_file():
@@ -559,10 +561,10 @@ def cmd_dump_report(args: argparse.Namespace) -> int:
     ct = ('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           if f.suffix.lower() == '.xlsx' else 'application/json')
     try:
-        rep = put_object(args.s3, f.name, f.read_bytes(),
-                         access_key=args.key, secret_key=args.secret,
-                         endpoint=args.endpoint, region=args.region,
-                         content_type=ct)
+        rep = upload_file(args.s3, f.name, f,
+                          access_key=args.key, secret_key=args.secret,
+                          endpoint=args.endpoint, region=args.region,
+                          content_type=ct)
     except S3Error as exc:
         return _err(str(exc))
     print(json.dumps(rep, ensure_ascii=False))
@@ -802,39 +804,68 @@ def cmd_cache(args: argparse.Namespace) -> int:
 
 
 def cmd_dump_records(args: argparse.Namespace) -> int:
-    """Вывод первых N строк таблицы 1CD в JSON/CSV (Фаза 20, для отладки правил)."""
+    """Вывод первых N строк таблицы 1CD в JSON/CSV (Фаза 20, для отладки правил).
+
+    Фаза 49 (U40): потоковый вывод — строки пишутся в stdout по мере чтения,
+    а не накапливаются в списке; --max-bytes ограничивает размер вывода.
+    """
     from .source_8x_file import Database1CD, decode_field
 
     cd = Path(args.source_dir) / '1Cv8.1CD'
     if not cd.is_file():
         return _err(f'нет 1Cv8.1CD в {args.source_dir}')
     limit = args.limit
+    max_bytes = getattr(args, 'max_bytes', 0) or 0
+
     with Database1CD(cd) as db:
         t = db.tables.get(args.table)
         if t is None:
             return _err(f'нет таблицы {args.table!r}')
-        rows: list[dict[str, Any]] = []
-        for i, row in enumerate(db.table_rows(t)):
-            if i >= limit:
-                break
+        assert t is not None
+
+        def _rec(row: bytes) -> dict[str, Any]:
             rec: dict[str, Any] = {}
             for fname, fdef in t.fields.items():
                 try:
-                    rec[fname] = _jsonable(decode_field(fdef, row[fdef.offset:fdef.offset + fdef.size]))
+                    rec[fname] = _jsonable(decode_field(
+                        fdef, row[fdef.offset:fdef.offset + fdef.size]))
                 except (IndexError, ValueError, UnicodeDecodeError):
                     rec[fname] = None
-            rows.append(rec)
-    if args.format == 'csv':
-        import csv
-        import io
-        out = io.StringIO()
-        if rows:
-            w = csv.DictWriter(out, fieldnames=list(rows[0].keys()))
-            w.writeheader()
-            w.writerows(rows)
-        print(out.getvalue().rstrip())
-    else:
-        print(json.dumps(rows, ensure_ascii=False, indent=2, default=str))
+            return rec
+
+        if args.format == 'csv':
+            import csv
+            import sys
+            w = csv.writer(sys.stdout)
+            fields = list(t.fields)
+            w.writerow(fields)
+            total = sum(len(x) + 1 for x in fields)
+            for i, row in enumerate(db.table_rows(t)):
+                if i >= limit:
+                    break
+                rec = _rec(row)
+                line = ','.join(str(rec[f]) for f in fields)
+                if max_bytes and total + len(line) > max_bytes:
+                    break
+                w.writerow([rec[f] for f in fields])
+                total += len(line) + 1
+            return 0
+        import sys
+        out = sys.stdout
+        out.write('[')
+        first = True
+        total = 0
+        for i, row in enumerate(db.table_rows(t)):
+            if i >= limit:
+                break
+            rec = _rec(row)
+            chunk = json.dumps(rec, ensure_ascii=False, default=str)
+            if max_bytes and total + len(chunk) > max_bytes:
+                break
+            out.write(('' if first else ',') + chunk)
+            first = False
+            total += len(chunk)
+        out.write(']\n')
     return 0
 
 
@@ -1086,6 +1117,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_dump.add_argument('--table', required=True)
     p_dump.add_argument('--limit', type=int, default=20)
     p_dump.add_argument('--format', choices=['json', 'csv'], default='json')
+    p_dump.add_argument('--max-bytes', type=int, default=0,
+                        help='Потоковый вывод: остановить после N байт (Фаза 49)')
 
     sub.add_parser('metrics', help='Метрики в формате Prometheus (Фаза 21)')
 

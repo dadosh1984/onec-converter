@@ -42,3 +42,6 @@ tsconfig.json
 # Временные каталоги тестов больших баз (см. pytest.ini / scripts/gates.sh)
 ONEC_TEST_TMP/
 .test_tmp/
+
+
+.coverage

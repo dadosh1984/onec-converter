@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -78,7 +79,9 @@ class Cache:
             d = self._dir(key)
             d.mkdir(parents=True, exist_ok=True)
             p = d / _safe_component(name, 'имя')
-            p.write_bytes(data)
+            tmp = d / (p.name + '.tmp')
+            tmp.write_bytes(data)
+            os.replace(tmp, p)  # атомарно: битый артефакт не появится (Фаза 49 U42)
             return p
 
     def put_json(self, key: str, name: str, obj: object) -> Path:

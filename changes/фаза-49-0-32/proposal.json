@@ -1,0 +1,16 @@
+{
+  "title": "фаза-49-0-32",
+  "goal": "Фаза 49 (0.32.0) — память и потоковость (раунд 5): (1) v77_reader потоково — mmap-сканер секций iter_sections_text, одна секция в памяти (U35/U4); (2) s3 upload_file стримингом чанками (sha256+size первым проходом, http.client), dump-report на нём (U36/U5); (3) table_stats_all одним проходом + общий кеш (U37); (4) guid_diff проверен — только метаданные, данные не грузит, нет-оп (U38); (5) read_metadata in-memory LRU 8 записей (U39); (6) dump-records потоковый JSON/CSV + --max-bytes (U40); (7) cache.put атомарно tmp+rename (U42); (8) fix ruff F841. Тесты +11 в tests/test_phase49_memory.py. CHANGELOG 0.32.0, план ✅, релиз.",
+  "platform": "тесты в E:\\test через gates.sh; версия 0.32.0",
+  "constraints": "compact",
+  "budget": "compact",
+  "clarity": "vague",
+  "language": "ru",
+  "appliesLessons": [
+    "фазу-23-conformance-тесты:forge:753265ca3073",
+    "фазу-24-полный-сценарий:forge:1b6dbaa2498b",
+    "фазу-25-audit-логирование:forge:7c216dc57da7",
+    "фаза-34-0-17:forge:b0b6774412c4",
+    "фаза-42-0-25:forge:f98f24530af6"
+  ]
+}

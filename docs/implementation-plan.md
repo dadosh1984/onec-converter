@@ -550,14 +550,15 @@ _oAuth2 — реализовано) — в бэклог ниже. План ра�
 
 ## Фаза 49 — Память и потоковость (0.32.0)
 
-- [ ] [fact] v77_reader потоковое чтение секций (U35, закрывает U4)
-- [ ] [fact] s3 upload потоковой загрузкой (U36, закрывает U5)
-- [ ] [fact] table_stats одним проходом по файлу (U37)
-- [ ] [fact] guid_diff инкрементально чанками (U38)
-- [ ] [fact] read_metadata in-memory LRU для MCP-сессии (U39)
-- [ ] [fact] dump-records потоковый CSV + --max-bytes (U40)
-- [ ] [fact] cache: атомарная запись tmp+rename (U42)
-- [ ] [assumption] ворота зелёные; релиз 0.32.0
+- [x] [fact] v77_reader потоково: mmap-сканер секций (U35/U4) — одна секция в памяти
+- [x] [fact] s3 upload_file стримингом чанками, dump-report на нём (U36/U5)
+- [x] [fact] table_stats_all одним проходом + общий кеш (U37)
+- [x] [fact] guid_diff: проверено — только метаданные, данные не грузит (U38, нет-оп)
+- [x] [fact] read_metadata in-memory LRU (U39)
+- [x] [fact] dump-records потоковый JSON/CSV + --max-bytes (U40)
+- [x] [fact] cache tmp+rename атомарно (U42)
+- [x] [fact] fix ruff F841 (db_ctx)
+- [x] [assumption] ворота зелёные; релиз 0.32.0
 
 ## Фаза 50 — Покрытие и тесты (0.33.0)
 

@@ -30,6 +30,7 @@ import re
 import struct
 import time
 import zlib
+from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -374,6 +375,8 @@ class Database1CD:
 
         Идея A2 (1C_PrometheusExporter): метрики таблиц для оценки объёма
         переноса. Лениво: данные таблицы читаются один раз и кешируются.
+        Чтение точечное (mmap-срез страниц таблицы, Фаза 49 U37), а не
+        полный проход по файлу.
         """
         if table_name not in self._stats_cache:
             t = self.tables[table_name]
@@ -381,6 +384,16 @@ class Database1CD:
             rows = len(data) // t.row_length if t.row_length else 0
             self._stats_cache[table_name] = (rows, len(data))
         return self._stats_cache[table_name]
+
+    def table_stats_all(self) -> dict[str, tuple[int, int]]:
+        """Статистика всех таблиц одним проходом (U37): общий кеш и mmap.
+
+        Один цикл вместо N отдельных вызовов — каждый вызов table_stats
+        ложится в общий кеш, повторные запросы не читают страницы.
+        """
+        for name in list(self.tables):
+            self.table_stats(name)
+        return dict(self._stats_cache)
 
     def ref_name(self, table_name: str, raw16: bytes) -> str | None:
         """Имя объекта таблицы по сырой ссылке (кеш ссылок GUID→наименование).
@@ -950,14 +963,19 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
 
     Объекты конфигурации (CONFIG/DBNames) связываются с физическими таблицами
     по DBNames (kind + номер); поля — физические поля таблицы.
-    Результат кешируется на диск (по признакам файла) — повторные вызовы
-    для одной и той же базы выполняются за миллисекунды.
+    Результат кешируется на диск (по признакам файла) и в памяти
+    (LRU, Фаза 49 U39) — повторные вызовы для одной и той же базы
+    выполняются за миллисекунды.
     """
     p = Path(path)
-    cache = _metadata_disk_cache()
     key = file_key(p)
+    mem = _mem_meta_get(key)
+    if mem is not None:
+        return mem
+    cache = _metadata_disk_cache()
     hit = cache.get_json(key, 'metadata')
     if isinstance(hit, dict):
+        _mem_meta_put(key, hit)
         return hit  # type: ignore[no-any-return,unused-ignore]
     objects: list[dict[str, Any]] = []
     tables: list[str] = []
@@ -970,7 +988,7 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
         raise FormatError(
             f'read_metadata({p}): файл повреждён или не является ИБ 8.x: '
             f'{exc}') from exc
-    with db as db_ctx:
+    with db:
         tables = sorted(db.tables)
         locale = db.locale
         t0 = time.perf_counter()
@@ -1026,7 +1044,31 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
     result = {'objects': objects, 'tables': tables, 'locale': locale,
               'timings': timings.snapshot()}
     cache.put_json(key, 'metadata', result)
+    _mem_meta_put(key, result)
     return result
+
+
+# ---- in-memory LRU для read_metadata (Фаза 49, U39: MCP-сессии) ----
+_MEM_META_MAX = 8
+_mem_meta: OrderedDict[str, dict[str, Any]] = OrderedDict()
+
+
+def _mem_meta_get(key: str) -> dict[str, Any] | None:
+    if key not in _mem_meta:
+        return None
+    _mem_meta.move_to_end(key)
+    return _mem_meta[key]
+
+
+def _mem_meta_put(key: str, value: dict[str, Any]) -> None:
+    _mem_meta[key] = value
+    _mem_meta.move_to_end(key)
+    while len(_mem_meta) > _MEM_META_MAX:
+        _mem_meta.popitem(last=False)
+
+
+def _clear_mem_meta() -> None:
+    _mem_meta.clear()
 
 
 def _metadata_disk_cache() -> Cache:

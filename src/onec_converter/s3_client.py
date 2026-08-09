@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime
 import os
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 from .crypto_utils import hmac_sha256, sha256_hex
@@ -37,7 +38,9 @@ def _sha256_hex(data: bytes) -> str:
 def sign_v4(access_key: str, secret_key: str, *, method: str, path: str,
             host: str, payload: bytes, region: str = 'us-east-1',
             service: str = 's3', now: datetime.datetime | None = None,
-            query: str = '') -> tuple[str, str, str]:
+            query: str = '',
+            payload_hash_override: str | None = None
+            ) -> tuple[str, str, str]:
     """Канонический AWS SigV4: возвращает (authorization, amz_date, sha256).
 
     path — URL-путь объекта (например `/bucket/key`); host — заголовок Host
@@ -46,7 +49,8 @@ def sign_v4(access_key: str, secret_key: str, *, method: str, path: str,
     dt = now or datetime.datetime.now(datetime.UTC)
     amz_date = dt.strftime(_ISO)
     day = dt.strftime(_DAY)
-    payload_hash = _sha256_hex(payload)
+    payload_hash = (payload_hash_override if payload_hash_override is not None
+                    else _sha256_hex(payload))
 
     canonical_headers = (
         f'host:{host}\n'
@@ -118,6 +122,83 @@ def put_object(bucket: str, key: str, data: bytes, *,
                     'status': resp.status}
     except urllib.error.URLError as exc:
         raise S3Error(f'S3 PUT не удался: {exc}') from exc
+
+
+def upload_file(bucket: str, key: str, path: str | Path, *,
+                access_key: str = '', secret_key: str = '',
+                endpoint: str = '', region: str = 'us-east-1',
+                content_type: str = 'application/json',
+                chunk: int = 8 * 1024 * 1024,
+                timeout: int = 600) -> dict[str, Any]:
+    """Потоковая загрузка файла в S3 (PUT), O(1) память (Фаза 49, U36).
+
+    Первый проход — sha256 и размер (чанками); второй проход — тело
+    чанками через http.client (Content-Length задан). Файл не читается
+    целиком, в отличие от put_object(…, read_bytes()).
+    """
+    import hashlib
+    import http.client
+    import urllib.parse
+
+    p = Path(path)
+    if not p.is_file():
+        raise S3Error(f'нет файла: {p}')
+    size = p.stat().st_size
+    h = hashlib.sha256()
+    with p.open('rb') as fh:
+        while True:
+            blk = fh.read(chunk)
+            if not blk:
+                break
+            h.update(blk)
+    payload_hash = h.hexdigest()
+
+    ak = access_key or os.environ.get('AWS_ACCESS_KEY_ID', '')
+    sk = secret_key or os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+    if not ak or not sk:
+        raise S3Error('нет ключей: передайте --key/--secret или AWS_*')
+
+    url, host = _endpoint_url(endpoint, bucket, key)
+    url_parts = urllib.parse.urlsplit(url)
+    path_part = (url_parts.path if url_parts.path else '/' + key)
+    authorization, amz_date, _ = sign_v4(
+        ak, sk, method='PUT', path=path_part, host=host, payload=b'',
+        region=region, payload_hash_override=payload_hash)
+
+    scheme = (url_parts.scheme or 'https').lower()
+    hostname = url_parts.hostname or ''
+    conn = (http.client.HTTPSConnection(hostname,
+                                        url_parts.port or 443, timeout=timeout)
+            if scheme == 'https'
+            else http.client.HTTPConnection(hostname,
+                                            url_parts.port or 80,
+                                            timeout=timeout))
+    try:
+        conn.putrequest('PUT', path_part)
+        for k, v in [('Host', host), ('Content-Type', content_type),
+                     ('Content-Length', str(size)),
+                     ('x-amz-content-sha256', payload_hash),
+                     ('x-amz-date', amz_date),
+                     ('Authorization', authorization)]:
+            conn.putheader(k, v)
+        conn.endheaders()
+        with p.open('rb') as fh:
+            while True:
+                blk = fh.read(chunk)
+                if not blk:
+                    break
+                conn.send(blk)
+        resp = conn.getresponse()
+        status = resp.status
+        resp.read()
+    except OSError as exc:
+        raise S3Error(f'S3 PUT не удался: {exc}') from exc
+    finally:
+        conn.close()
+    if status not in (200, 201, 204):
+        raise S3Error(f'S3 PUT не удался: HTTP {status}')
+    return {'ok': True, 'url': url, 'key': key, 'status': status,
+            'streamed': True}
 
 
 def _signed_request(method: str, url: str, host: str, path: str, *,

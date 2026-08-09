@@ -110,6 +110,73 @@ def iter_sections(root: list[Any]) -> Iterator[tuple[str, list[Any]]]:
             yield item[0], item[1:]
 
 
+def _section_name(text: str) -> str:
+    """Имя секции из её текста {'Имя', ...} — без полного парсинга."""
+    m = re.match(r'^\s*\{\s*"((?:[^"]|"")*)"', text)
+    return m.group(1).replace('""', '"') if m else ''
+
+
+def iter_sections_text(path: str | Path, encoding: str = 'cp866')\
+        -> Iterator[tuple[str, str]]:
+    """Потоковое чтение top-level секций 1Cv77.dat: (имя, текст секции).
+
+    Читает файл через mmap и сканирует байты (строки в кавычках с удвоением,
+    фигурные скобки), извлекая каждую секцию на глубине 1 целиком — в
+    памяти одна секция, а не весь файл (Фаза 49, U35). Реальный 1Cv77.dat
+    — один длинный текст; построчное чтение не помогает.
+    """
+    import mmap
+
+    with open(path, 'rb') as f:
+        mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        try:
+            n = len(mm)
+            i = 0
+            depth = 0
+            sec_start: int | None = None
+            while i < n and mm[i] != ord('{'):
+                i += 1
+            if i >= n:
+                return
+            i += 1
+            depth = 1
+            while i < n:
+                c = mm[i]
+                if c == ord('"'):  # строка: пропустить (с удвоенными кавычками)
+                    i += 1
+                    while i < n:
+                        if mm[i] == ord('"'):
+                            if i + 1 < n and mm[i + 1] == ord('"'):
+                                i += 2
+                                continue
+                            break
+                        i += 1
+                    i += 1
+                    continue
+                if c == ord('{'):
+                    if depth == 1:
+                        sec_start = i
+                    depth += 1
+                    i += 1
+                    continue
+                if c == ord('}'):
+                    depth -= 1
+                    if depth == 1 and sec_start is not None:
+                        text = mm[sec_start:i + 1].decode(encoding,
+                                                          errors='replace')
+                        name = _section_name(text)
+                        if name:
+                            yield name, text
+                        sec_start = None
+                    if depth == 0:
+                        return
+                    i += 1
+                    continue
+                i += 1
+        finally:
+            mm.close()
+
+
 class Section:
     """Секция файла данных: имя + payload."""
 
@@ -121,16 +188,19 @@ class Section:
 
 
 class V77Reader:
-    """Чтение 1Cv77.dat: секции, Unique IDs, Constants, References."""
+    """Чтение 1Cv77.dat: секции, Unique IDs, Constants, References.
+
+    Секции читаются потоково (iter_sections_text, Фаза 49 U35): в память
+    попадает одна секция за раз, а не весь файл.
+    """
 
     def __init__(self, path: str | Path, encoding: str = 'cp866'):
         self.path = Path(path)
         self.encoding = encoding
-        raw = self.path.read_bytes()
-        self._root = parse_dat(raw.decode(encoding, errors='replace'))
         self._sections: dict[str, Section] = {}
-        for name, payload in iter_sections(self._root):
-            self._sections[name] = Section(name, payload)
+        for name, text in iter_sections_text(path, encoding):
+            parsed = parse_dat(text)
+            self._sections[name] = Section(name, parsed[1:])
 
     @classmethod
     def from_bytes(cls, data: bytes, encoding: str = 'cp866') -> V77Reader:
@@ -138,9 +208,9 @@ class V77Reader:
         obj = cls.__new__(cls)
         obj.path = Path('<bytes>')
         obj.encoding = encoding
-        obj._root = parse_dat(data.decode(encoding, errors='replace'))
+        parsed = parse_dat(data.decode(encoding, errors='replace'))
         obj._sections = {}
-        for name, payload in iter_sections(obj._root):
+        for name, payload in iter_sections(parsed):
             obj._sections[name] = Section(name, payload)
         return obj
 
