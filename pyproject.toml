@@ -58,3 +58,11 @@ ignore = ["DTZ001", "DTZ007"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+[tool.onec-gates]
+# Модули порога покрытия (Фаза 23; расширено в Фазе 44 на модули 32-40).
+coverage_modules = [
+    "objects_filter", "jwt_auth", "cache", "http_client", "mcp_server",
+    "audit", "clone_db", "health", "s3_client", "sql_source", "ai_skills",
+]
+coverage_threshold = 70

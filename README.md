@@ -213,6 +213,11 @@ onec-converter sonar-report --format json     # CI-артефакт
 BDD-сценарии миграции — `tests/bdd.py` (given/when/then через pytest-фикстуры,
 без новых зависимостей) + `tests/test_bdd_scenario.py` (сквозной сценарий
 extract→transform→load→verify). Sonar: отчёт ruff в формате SonarQube
+
+Политика типизации (Фаза 44): mypy strict применяется к `src/` и `scripts/`;
+`tests/` осознанно не типизируются — тесты проверяют поведение, а не типы.
+Порог покрытия (70%, 11 модулей Фаз 23-44) задаётся в `pyproject.toml`
+(`[tool.onec-gates]`) и прогоняется в CI (`gates.sh pytest --coverage`).
 Generic Issue Import (XML/JSON). OpenAPI-спека приёмника — `docs/openapi.yaml`,
 генерируется `scripts/gen_openapi.py` из кода (http_client + Module.bsl).
 

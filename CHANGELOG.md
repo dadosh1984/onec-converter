@@ -3,6 +3,23 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.27.0 (2026-08)
+
+### Покрытие и качество (Фаза 44)
+- COVERAGE_MODULES перенесён в pyproject.toml ([tool.onec-gates]) и расширен
+  на модули Фаз 32-40: audit, clone_db, health, s3_client, sql_source,
+  ai_skills (все 88-97% покрытия); порог 70% прогоняется в CI
+  (gates.sh pytest --coverage).
+- mypy strict распространяется на scripts/ (gen_openapi, check_bsl и др.);
+  политика задокументирована в README: tests/ осознанно не типизируются.
+- PII_PROFILES: профиль 'uzbekistan' (ПИНФЛ/ИНН/паспорт) + тесты маскирования
+  и сканера (profile='UZ').
+- gates.sh: тайминг прогона pytest + предупреждение при превышении лимита
+  (PYTEST_TIME_LIMIT, по умолчанию 180 с).
+- check_bsl: тест на несколько .bsl-файлов (main() принимает список).
+- Ворота: pytest (+6), conformance, ruff, mypy (55: src+scripts),
+  check_bsl, vitest.
+
 ## 0.26.0 (2026-08)
 
 ### SQL-источники до production-grade (Фаза 43)

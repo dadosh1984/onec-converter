@@ -53,19 +53,49 @@ skip_or_fail() {
   return 0
 }
 
-# Модули Фаз 29-31 (новые) — порог покрытия 70% (Фаза 23).
-COVERAGE_MODULES=(objects_filter jwt_auth cache http_client mcp_server)
+# Модули порога покрытия (Фаза 23; список — в pyproject [tool.onec-gates], Фаза 44).
+COVERAGE_MODULES=()
+COV_THRESHOLD=70
+if [[ -f pyproject.toml ]]; then
+  while IFS= read -r m; do
+    [[ -n "$m" ]] && COVERAGE_MODULES+=("$m")
+  done < <(python - <<'PY'
+import tomllib
+with open('pyproject.toml', 'rb') as f:
+    d = tomllib.load(f)
+cfg = d.get('tool', {}).get('onec-gates', {})
+for m in cfg.get('coverage_modules', []):
+    print(m)
+PY
+)
+  COV_THRESHOLD=$(python - <<'PY'
+import tomllib
+with open('pyproject.toml', 'rb') as f:
+    d = tomllib.load(f)
+print(d.get('tool', {}).get('onec-gates', {}).get('coverage_threshold', 70))
+PY
+)
+fi
 COV_ARGS=()
 if [[ "$COVERAGE" == "1" ]]; then
   for m in "${COVERAGE_MODULES[@]}"; do
     COV_ARGS+=(--cov=onec_converter.$m)
   done
-  COV_ARGS+=(--cov-report=term --cov-fail-under=70)
+  COV_ARGS+=(--cov-report=term --cov-fail-under=$COV_THRESHOLD)
 fi
+
+# Лимит времени прогона pytest (сек) — предупреждение при замедлении ворот.
+PYTEST_TIME_LIMIT="${PYTEST_TIME_LIMIT:-180}"
 
 run_pytest() {
   echo "== pytest ${COV_ARGS[*]:+(${COV_ARGS[*]})} =="
-  PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} --basetemp=${ONEC_TEST_TMP}" python -m pytest -q "${COV_ARGS[@]}"
+  local t0=$SECONDS
+  PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} --basetemp=${ONEC_TEST_TMP}" python -m pytest -q "${COV_ARGS[@]}" || return 1
+  local elapsed=$((SECONDS - t0))
+  echo "== pytest: ${elapsed}s =="
+  if (( elapsed > PYTEST_TIME_LIMIT )); then
+    echo "!! pytest превысил лимит ${PYTEST_TIME_LIMIT}s (${elapsed}s) — тесты замедляются" >&2
+  fi
 }
 run_conformance() {
   echo "== MCP conformance =="
@@ -77,8 +107,8 @@ run_ruff() {
   python -m ruff check src tests
 }
 run_mypy() {
-  echo "== mypy (strict) =="
-  python -m mypy src
+  echo "== mypy (strict, src + scripts) =="
+  python -m mypy src scripts
 }
 
 run_bsl() {

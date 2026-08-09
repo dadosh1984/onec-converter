@@ -359,14 +359,13 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 - [x] [assumption] ворота зелёные; релиз 0.26.0
 ## Фаза 44 — Покрытие и качество (0.27.0)
 
-- [ ] [fact] COVERAGE_MODULES в pyproject.toml; расширить на audit/clone_db/health/s3_client/sql_source/ai_skills
-- [ ] [fact] mypy --strict на scripts/ (gen_openapi, gates-хелперы)
-- [ ] [fact] решение по mypy tests/ задокументировано (README/RELEASING)
-- [ ] [fact] PII_PROFILES: профиль Узбекистан (ИНН/ПИНФЛ) + тесты
-- [ ] [fact] gates.sh: тайминг прогона + предупреждение при превышении лимита
-- [ ] [fact] check_bsl: тест на несколько .bsl-файлов
-- [ ] [assumption] ворота зелёные; релиз 0.27.0
-
+- [x] [fact] COVERAGE_MODULES в pyproject.toml; расширить на audit/clone_db/health/s3_client/sql_source/ai_skills
+- [x] [fact] mypy --strict на scripts/ (gen_openapi, gates-хелперы)
+- [x] [fact] решение по mypy tests/ задокументировано (README/RELEASING)
+- [x] [fact] PII_PROFILES: профиль Узбекистан (ИНН/ПИНФЛ) + тесты
+- [x] [fact] gates.sh: тайминг прогона + предупреждение при превышении лимита
+- [x] [fact] check_bsl: тест на несколько .bsl-файлов
+- [x] [assumption] ворота зелёные; релиз 0.27.0
 ## Фаза 45 — AI-навыки: глубина и CLI (0.28.0)
 
 - [ ] [fact] compress_metadata: опция сохранения саммари в файл

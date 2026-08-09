@@ -31,6 +31,9 @@ jobs:
       - name: pytest (unit)
         run: bash scripts/gates.sh pytest
 
+      - name: pytest (coverage, модули Фаз 23-44)
+        run: bash scripts/gates.sh pytest --coverage
+
       - name: pytest (MCP conformance, E2E stdio)
         run: bash scripts/gates.sh conformance
 
