@@ -42,8 +42,6 @@ def auto_map_schemas(source_meta: dict[str, Any],
                 break
         if target_obj is None:
             continue
-        src_attrs = {a['name']: a for a in (o.get('attributes') or [])}
-        del src_attrs
         tgt_attrs = {a['name']: a for a in (target_obj.get('attributes') or [])}
         tgt_norm = {_norm_field(n): n for n in tgt_attrs}
         mapping: dict[str, str] = {}

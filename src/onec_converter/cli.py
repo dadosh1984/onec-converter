@@ -18,6 +18,7 @@ from typing import Any
 
 from . import __version__
 from .audit import get_audit, read_audit, set_audit
+from .config import DEFAULT_SOURCE_ENCODING
 from .http_client import HttpClient83
 from .intermediate import (
     OBJ_ATTRS,
@@ -574,7 +575,8 @@ def cmd_rules_diff(args: argparse.Namespace) -> int:
 
 def cmd_sonar_report(args: argparse.Namespace) -> int:
     """Отчёт ruff в sonar-формате (Фаза 28): --format xml|json, --target,
-    --out — запись в файл для CI-артефакта."""
+    --out — запись в файл для CI-артефакта. Контракт потоков (аудит раунда 6,
+    A8): тело отчёта — stdout, метаданные {ok,total,format} — stderr."""
     from .sonar_report import SonarReportError, sonar_report
 
     try:
@@ -650,7 +652,7 @@ def cmd_mcp(_args: argparse.Namespace) -> int:
 
 def cmd_export_xlsx(args: argparse.Namespace) -> int:
     """Экспорт первых N строк таблицы 1CD в XLSX (Фаза 53, U11)."""
-    from .source_8x_file import Database1CD, decode_field
+    from .source_8x_file import Database1CD
 
     cd = Path(args.source_dir) / '1Cv8.1CD'
     if not cd.is_file():
@@ -662,17 +664,11 @@ def cmd_export_xlsx(args: argparse.Namespace) -> int:
         t = db.tables.get(args.table)
         if t is None:
             return _err(f'нет таблицы {args.table!r}')
+        assert t is not None
         for i, row in enumerate(db.table_rows(t)):
             if args.limit and i >= args.limit:
                 break
-            rec: dict[str, object] = {}
-            for fname, fdef in t.fields.items():
-                try:
-                    rec[fname] = _jsonable(decode_field(
-                        fdef, row[fdef.offset:fdef.offset + fdef.size]))
-                except (IndexError, ValueError, UnicodeDecodeError):
-                    rec[fname] = None
-            rows.append(rec)
+            rows.append(_table_row_to_rec(row, t))
     from openpyxl import Workbook
     from openpyxl.styles import Font as XFont
 
@@ -764,6 +760,8 @@ def cmd_load(args: argparse.Namespace) -> int:
         print(json.dumps({'ok': True, 'created': created, 'updated': updated},
                          ensure_ascii=False))
         return 0
+    if not args.target:
+        return _err('нет способа загрузки: укажите --target, --http или --direct')
     target = Path(args.target)
     if target.is_dir() or args.target.endswith(('/', '\\')):
         target = target / 'load.json'
@@ -953,7 +951,7 @@ def cmd_dump_records(args: argparse.Namespace) -> int:
     Фаза 49 (U40): потоковый вывод — строки пишутся в stdout по мере чтения,
     а не накапливаются в списке; --max-bytes ограничивает размер вывода.
     """
-    from .source_8x_file import Database1CD, decode_field
+    from .source_8x_file import Database1CD
 
     cd = Path(args.source_dir) / '1Cv8.1CD'
     if not cd.is_file():
@@ -967,16 +965,6 @@ def cmd_dump_records(args: argparse.Namespace) -> int:
             return _err(f'нет таблицы {args.table!r}')
         assert t is not None
 
-        def _rec(row: bytes) -> dict[str, Any]:
-            rec: dict[str, Any] = {}
-            for fname, fdef in t.fields.items():
-                try:
-                    rec[fname] = _jsonable(decode_field(
-                        fdef, row[fdef.offset:fdef.offset + fdef.size]))
-                except (IndexError, ValueError, UnicodeDecodeError):
-                    rec[fname] = None
-            return rec
-
         if args.format == 'csv':
             import csv
             import sys
@@ -987,7 +975,7 @@ def cmd_dump_records(args: argparse.Namespace) -> int:
             for i, row in enumerate(db.table_rows(t)):
                 if i >= limit:
                     break
-                rec = _rec(row)
+                rec = _table_row_to_rec(row, t)
                 line = ','.join(str(rec[f]) for f in fields)
                 if max_bytes and total + len(line) > max_bytes:
                     break
@@ -1002,7 +990,7 @@ def cmd_dump_records(args: argparse.Namespace) -> int:
         for i, row in enumerate(db.table_rows(t)):
             if i >= limit:
                 break
-            rec = _rec(row)
+            rec = _table_row_to_rec(row, t)
             chunk = json.dumps(rec, ensure_ascii=False, default=str)
             if max_bytes and total + len(chunk) > max_bytes:
                 break
@@ -1015,6 +1003,24 @@ def cmd_dump_records(args: argparse.Namespace) -> int:
 
 def _jsonable(v: Any) -> Any:
     return str(v) if v is not None and not isinstance(v, (int, float, bool, str)) else v
+
+
+def _table_row_to_rec(row: bytes, table: Any) -> dict[str, Any]:
+    """Декодировать строку 1CD в JSON-совместимый dict по полям таблицы.
+
+    Единый декодер для dump-records и export-xlsx (аудит раунда 6, B5):
+    бинарные/некорректные поля опускаются как None.
+    """
+    from .source_8x_file import decode_field
+
+    rec: dict[str, Any] = {}
+    for fname, fdef in table.fields.items():
+        try:
+            rec[fname] = _jsonable(decode_field(
+                fdef, row[fdef.offset:fdef.offset + fdef.size]))
+        except (IndexError, ValueError, UnicodeDecodeError):
+            rec[fname] = None
+    return rec
 
 
 def cmd_metrics(_args: argparse.Namespace) -> int:
@@ -1072,6 +1078,9 @@ def cmd_fetch_config(args: argparse.Namespace) -> int:
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
+    """Просмотр/фильтр журнала. Контракт потоков (аудит раунда 6, A3):
+    --json пишет записи в stdout построчно (ndjson), а counts/total — в stderr,
+    чтобы stdout был чистым машинопотоком без примесей."""
     try:
         recs = read_audit(args.file)
     except (OSError, ValueError) as exc:
@@ -1089,11 +1098,20 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
         out = Path(args.csv_out)
         fields = ['ts', 'level', 'operation', 'obj', 'result', 'guid', 'rule']
+
+        def _safe(v: str) -> str:
+            """Экранировать формульную инъекцию в Excel (аудит раунда 6, A7/E2):
+            значение, начинающееся с '=','+','-','@', безвредно префиксуется \t."""
+            s = str(v)
+            if s.startswith(('=', '+', '-', '@')):
+                return '\t' + s
+            return s
+
         with out.open('w', encoding='utf-8-sig', newline='') as f:
             w = _csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
             w.writeheader()
             for r in recs:
-                w.writerow(r)
+                w.writerow({k: _safe(v) for k, v in r.items()})
         print(json.dumps({'ok': True, 'out': str(out), 'rows': len(recs)},
                          ensure_ascii=False))
         return 0
@@ -1140,11 +1158,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_inspect = sub.add_parser('inspect', help='Метаданные источника')
     p_inspect.add_argument('--source-dir', required=True)
-    p_inspect.add_argument('--source-encoding', default='cp866')
+    p_inspect.add_argument('--source-encoding', default=DEFAULT_SOURCE_ENCODING)
 
     p_extract = sub.add_parser('extract', help='Извлечение данных в intermediate JSON')
     p_extract.add_argument('--source-dir', required=True)
-    p_extract.add_argument('--source-encoding', default='cp866')
+    p_extract.add_argument('--source-encoding', default=DEFAULT_SOURCE_ENCODING)
     p_extract.add_argument('--out', required=True)
     p_extract.add_argument('--anonymize-fields', default='')
     p_extract.add_argument('--limit', type=int, default=0)

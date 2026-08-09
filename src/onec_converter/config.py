@@ -11,12 +11,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+# Кодировка источника по умолчанию для 7.7 (CP866) — единый источник,
+# вместо хардкода 'cp866' в нескольких местах (аудит раунда 6, B6).
+DEFAULT_SOURCE_ENCODING = 'cp866'
+
 
 @dataclass
 class ProjectConfig:
     """Значения по умолчанию из конфиг-файла (onec.toml)."""
 
-    source_encoding: str = 'cp866'
+    source_encoding: str = DEFAULT_SOURCE_ENCODING
     limit: int = 0
     rules_file: str = ''
     target_url: str = ''
@@ -52,7 +56,7 @@ class ProjectConfig:
             ('tmp_dir', 'tmp_dir'),
         ]:
             if src in sec:
-                val = sec[src].strip('"')
+                val = sec[src].strip().strip('"').strip()
                 try:
                     if attr in ('limit', 'retries'):
                         setattr(cfg, attr, int(val))
@@ -67,7 +71,7 @@ class ProjectConfig:
                           ('client_secret', 'client_secret'),
                           ('secret', 'secret')]:
             if src in auth:
-                setattr(cfg, attr, auth[src].strip('"'))
+                setattr(cfg, attr, auth[src].strip().strip('"').strip())
         cfg._raw = {k: sec[k] for k in sec}
         return cfg
 

@@ -7,9 +7,18 @@ import sys
 from pathlib import Path
 
 
+def _cli_env() -> dict[str, str]:
+    """env для subprocess CLI: UTF-8 вывод независимо от консоли (аудит
+    раунда 6, H-фикс): без PYTHONIOENCODING child на Windows cp1251-консолях
+    падает UnicodeEncodeError при печати '\u2194' в --help."""
+    env = {**os.environ, 'PYTHONPATH': str(Path('src').resolve()),
+           'PYTHONIOENCODING': 'utf-8', 'PYTHONUTF8': '1'}
+    return env
+
+
 def test_python_m_cli_help():
     """python -m onec_converter.cli --help → exit 0, подкоманды в выводе."""
-    env = {**os.environ, 'PYTHONPATH': str(Path('src').resolve())}
+    env = _cli_env()
     proc = subprocess.run(
         [sys.executable, '-m', 'onec_converter.cli', '--help'],
         capture_output=True, encoding='utf-8', errors='replace', env=env,
@@ -20,7 +29,7 @@ def test_python_m_cli_help():
 
 
 def test_python_m_cli_version():
-    env = {**os.environ, 'PYTHONPATH': str(Path('src').resolve())}
+    env = _cli_env()
     proc = subprocess.run(
         [sys.executable, '-m', 'onec_converter.cli', '--version'],
         capture_output=True, encoding='utf-8', errors='replace', env=env,

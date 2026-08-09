@@ -141,11 +141,13 @@ def test_load_role_still_full(monkeypatch):
 # U24: migrate стримит прогресс (нет-оп — уже в stderr)
 # ---------------------------------------------------------------------------
 
-def test_migrate_logs_progress_in_meta():
-    """Progress migrate реализован через playbook_step в stderr + steps в
-    ответе — проверяем, что в ответе migrate есть массив steps."""
+def test_migrate_logs_progress_in_meta(tmp_path, monkeypatch):
+    """Progress migrate: steps в ответе. Артефакт project.json пишется
+    в tmp_path, а не в рабочий каталог репозитория (раунд 6, H-fix:
+    раньше тест создавал nope-dir/project.json в git-рабочем дереве)."""
     from onec_converter.mcp_server import migrate
 
+    monkeypatch.chdir(tmp_path)
     # без реальных баз migrate упадёт на init — но строкой-ошибкой, не исключением
     out = migrate('nope-dir', 's', 't', 'nope-src', 'http://nope', '{}')
     data = json.loads(out)
