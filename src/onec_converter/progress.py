@@ -127,6 +127,7 @@ class TermProgress:
         self._out = out or sys.stderr
         self._tty = _tty(self._out)
         self._width = _bar_width()
+        self._last_decile = -1
 
     def update(self, obj_type: str = '', table: str = '', rows: int = 1) -> None:
         """Сообщить о переносе N записей (по умолчанию 1) в таблицу."""
@@ -152,12 +153,19 @@ class TermProgress:
             self._out.write(line + '\x1b[K')
             self._out.flush()
         else:
-            if self.done == 1 or self.done == self.total or pct % 10 == 0:
-                line = (f'[onec-converter] перенос: {pct}% '
-                        f'({self.done}/{self.total}) '
-                        f'[{table or obj_type or ""}]')
-                self._out.write(line + '\n')
-                self._out.flush()
+            # вне TTY — редкие узлы прогресса: старт, каждая новая 10%-плитка, финал
+            decile = pct // 10 if pct >= 10 else 0
+            is_new_decile = decile != self._last_decile
+            if self.done == 1:
+                self._out.write(f'[onec-converter] перенос: 0% ({self.done}/{self.total}) '
+                                f'[{table or obj_type or ""}]\n')
+            elif self.done == self.total or (is_new_decile and pct >= 10):
+                self._out.write(f'[onec-converter] перенос: {pct}% '
+                                f'({self.done}/{self.total}) '
+                                f'[{table or obj_type or ""}]\n')
+            if is_new_decile:
+                self._last_decile = decile
+            self._out.flush()
 
     def finish(self, report: dict[str, Any] | None = None, ok: bool = True) -> None:
         if self._tty:
