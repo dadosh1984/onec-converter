@@ -102,6 +102,10 @@ def test_audit_chain_mutation_breaks(mut):
 
     if not mut:
         return
+    # гарантируем РЕАЛЬНУЮ подмену: если mut совпал с исходным значением "A"
+    # (или вызывает коллизию сериализации), стэйк цепочки не рвётся
+    # (второй хэш = prev_hash по-прежнему сходится) — тест станет бессмысленным.
+    mut = '~MUT~' if mut in ('A', 'B') else mut
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / 'audit.jsonl'
         log = AuditLog(p)

@@ -80,7 +80,12 @@ def enc_numeric(value: float, length: int, precision: int = 0) -> bytes:
 def enc_datetime(value: str | None) -> bytes:
     if value is None:
         return b'\x00' * 7
-    return bytes.fromhex(value)  # 'YYYYMMDDHHMMSS'
+    v = str(value)
+    if '-' in v and ':' in v:  # ISO 'YYYY-MM-DD HH:MM:SS' / 'YYYY-MM-DDTHH:MM:SS'
+        v = v.replace('T', ' ').split('.')[0]
+        parts = v.replace('-', ' ').replace(':', ' ').split()
+        v = ''.join(p.zfill(2) if i > 0 else p for i, p in enumerate(parts[:6]))
+    return bytes.fromhex(v)  # 'YYYYMMDDHHMMSS'
 
 
 def field_size(ftype: str, length: int) -> int:

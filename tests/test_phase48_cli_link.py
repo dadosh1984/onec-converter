@@ -135,8 +135,8 @@ def test_cli_registry_grows_to_33():
     cli_src = Path('src/onec_converter/cli.py').read_text(encoding='utf-8')
     handlers = re.findall(r"^\s+'([a-z0-9-]+)': cmd_", cli_src, flags=re.MULTILINE)
     parsers = re.findall(r"add_parser\('([a-z0-9-]+)'", cli_src)
-    # Фаза 54/55/56: 31 -> 33 (migrate, wizard)
-    assert len(parsers) == len(handlers) == 33, (len(parsers), len(handlers))
+    # Фаза 54/55/56: 31 -> 33 (migrate, wizard); Фаза bridge: +4 (export-xlsx restore, xlsx-*, bridge-*)
+    assert len(parsers) == len(handlers) == 38, (len(parsers), len(handlers))
 
 
 # ---- README-рецепт использует реальную команду verify ----

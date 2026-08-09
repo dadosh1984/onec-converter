@@ -40,7 +40,10 @@ class ReceiverReferenceIndex:
                 continue
             key: list[str] = []
             if code is not None:
-                key.append(decode_nc(row[code.offset:code.offset + code.size]))
+                cbuf = row[code.offset:code.offset + code.size]
+                dec = (decode_nvc(cbuf, code.null_exists)
+                       if code.type == 'NVC' else decode_nc(cbuf))
+                key.append(dec or '')
             if descr is not None:
                 key.append(_nvc_text(row, descr))
             self._map[(table_name, tuple(key))] = raw

@@ -164,6 +164,8 @@ def test_extract_8x_objects_group_on_real_base():
     assert not selects(specs, 'Таблица', '_USERPASSWORD', table='_USERPASSWORD')
 
 
+@REQUIRED_BASE_81
+@pytest.mark.integration  # полное чтение 2.5ГБ базы (все таблицы) — вне быстрого прогона
 def test_extract_8x_named_types_real_base():
     """named=True: конфигурационные таблицы получают тип `kind.имя`
     (совместимо с правилами TOON migrate --rules), а не `Таблица.*`."""

@@ -1,0 +1,16 @@
+{
+  "title": "mcp-сервер-cli-onec",
+  "goal": "Добавить в MCP-сервер/CLI onec-converter визуальный progress-бар в терминал при переносе данных: показывать по каким объектам (справочники, документы, регистры) и в каких таблицах приёмника реально перенесены записи, сколько объектов и сколько процентов выполнено относительно источника, и что ещё не перенесено. Реализовать в CLI migrate --direct / load_direct: после каждого пакета обновлять прогресс (загружено/всего объектов и таблиц, процент, оставшиеся таблицы). Вывод — в stderr/терминал как progress-бар (без ломания JSON в stdout). Сохранить совместимость с MCP (progress через stderr-логи).",
+  "platform": "",
+  "constraints": "compact",
+  "budget": "compact",
+  "clarity": "vague",
+  "language": "ru",
+  "appliesLessons": [
+    "скилл-onec-converter-migration:forge:bc925d77a1ff",
+    "скилл-onec-converter-migration:forge:684890ea40c4",
+    "скилл-onec-converter-migration:forge:d89d5187918c",
+    "фаза-46-0-29:forge:8bca73bcb5e5",
+    "скилл-onec-converter-migration:forge:56cc53ac3e99"
+  ]
+}

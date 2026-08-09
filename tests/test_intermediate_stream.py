@@ -40,4 +40,4 @@ def test_stream_encodes_bytes_fields(tmp_path: Path):
     loaded = load_json_batch(p)
     import base64
     assert loaded[0]['attributes']['Картинка'] == base64.b64encode(b'\x89PNG\x00').decode('ascii')
-    assert list(load_json_stream(tmp_path / 'blob_stream.json'))[0] == loaded[0]
+    assert next(load_json_stream(tmp_path / 'blob_stream.json')) == loaded[0]

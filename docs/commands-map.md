@@ -1,9 +1,9 @@
 # Карта команд onec-converter (Фаза 29.1)
 
-Сгенерировано из фактического реестра: CLI 33 подкоманды, MCP 18 тулов.
+Сгенерировано из фактического реестра: CLI 38 подкоманд, MCP 18 тулов.
 Поток данных: inspect → extract → map → transform → load → verify.
 
-## CLI (33)
+## CLI (38)
 
 | Команда | Вход | Выход | Назначение |
 |---|---|---|---|
@@ -32,6 +32,11 @@
 | stats | source_dir | сводка | таблицы/строки/объём/locale |
 | mcp | — | тулы | список MCP-тулов сервера |
 | export-xlsx | source_dir, table | xlsx | экспорт N строк таблицы в Excel |
+| xlsx-export | source_dir, table | xlsx | выгрузка записей объекта в XLSX-мост (U27) |
+| xlsx-to-intermediate | xlsx, type | JSON | конвертация XLSX-шаблона приёмника в intermediate (U27) |
+| bridge-export | source_dir, type | xlsx | справочник/регистр -> xlsx-мост (аналог epf-макета) |
+| bridge-import | xlsx, target_dir | копия | xlsx-мост -> копия приёмника (find-or-create) |
+| bridge-verify | xlsx, target_dir(копия) | отчёт | обратный контроль: сверка данных копии приёмника с мостом |
 | shell | source-dir | REPL | интерактивное исследование базы (tables/query, Фаза 39) |
 | migrate | source-dir, out | JSON/direct | сквозной перенос одной командой: extract→transform→load (Фаза 56) |
 | wizard | (интерактив) | команда | мастер переноса, собирает и запускает migrate (Фаза 56) |

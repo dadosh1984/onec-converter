@@ -15,6 +15,7 @@ import base64
 import json
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +69,8 @@ def _json_default(o: Any) -> Any:
     """Сериализация нестандартных типов 1С: bytes (BLOB/хранение) -> base64."""
     if isinstance(o, bytes):
         return base64.b64encode(o).decode('ascii')
+    if isinstance(o, datetime):
+        return o.isoformat()
     raise TypeError(f'Object of type {type(o).__name__} is not JSON serializable')
 
 

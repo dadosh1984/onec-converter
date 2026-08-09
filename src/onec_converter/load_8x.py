@@ -79,6 +79,11 @@ def object_to_row(table: TableDef, fields: list[FieldMap], obj: dict[str, Any],
         value: Any = None
         if fm is not None:
             value = attrs.get(fm.name)
+            if value is None:
+                # служебные поля: допускаем человекочитаемые имена 'Дата'/'Номер'/'Проведён'
+                value = attrs.get({
+                    '_DATE_TIME': 'Дата', '_NUMBER': 'Номер',
+                    '_POSTED': 'Проведён'}.get(fd.name, ''))
         elif fd.name == '_CODE':
             value = attrs.get('Код', key[0] if key else None)
         elif fd.name == '_DESCRIPTION':
@@ -295,7 +300,7 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
     report: dict[str, Any] = {}
     if verify_after:
         report = _verify_direct(objects, final, index, prefix_by_table,
-                                idref_counter)
+                                idref_counter, ref_index)
     get_audit().info('load', obj=str(len(objects)), result='ok',
                      detail=f'total={len(objects)} tables={tables_stat}')
     progress.finish({'total': len(objects)}, ok=True)
@@ -318,7 +323,8 @@ def _cleanup_workfiles(wd: Path, keep: Path | None = None) -> None:
 def _verify_direct(objects: list[dict[str, Any]], final: Path,
                    index: dict[str, Any],
                    prefix_by_table: dict[str, bytes],
-                   idref_counter: dict[str, int]) -> dict[str, Any]:
+                   idref_counter: dict[str, int],
+                   ref_index: dict[str, Any] | None = None) -> dict[str, Any]:
     """Чтение записанных строк из копии и сверка (roundtrip без потерь).
 
     Для каждого входного объекта эквивалентная строка кодируется заново
@@ -353,7 +359,9 @@ def _verify_direct(objects: list[dict[str, Any]], final: Path,
             pos = _type_position(objects, obj_type, obj)
             line = written[tn][base_count[tn] + pos]
             reread = object_to_row(table, fm, obj,
-                                   _make_idref(pref, pos))
+                                   _make_idref(pref, pos),
+                                   ref_index=ref_index,
+                                   references=obj.get('references') or {})
             if line != reread:
                 mismatched.append(f'{obj_type}:{list(obj.get("key") or [])}')
             checked += 1

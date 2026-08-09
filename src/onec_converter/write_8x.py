@@ -62,6 +62,10 @@ def _read_page(path: Path, num: int, page_size: int = PAGE_SIZE) -> bytes:
 
 
 def _write_page(path: Path, num: int, data: bytes, page_size: int = PAGE_SIZE) -> None:
+    """Запись страницы; неполные данные дополняются нулями до page_size,
+    чтобы размер файла всегда оставался кратным странице (требование 1С)."""
+    if len(data) < page_size:
+        data = data + b'\x00' * (page_size - len(data))
     with open(path, 'r+b') as f:
         f.seek(num * page_size)
         f.write(data[:page_size])
@@ -153,6 +157,73 @@ def _ensure_not_locked(path: Path) -> None:
         raise LockError(f'база используется (1Cv8tmp*) — запись запрещена: {path}')
 
 
+def overwrite_row(path: str | Path, table_name: str, row_index: int,
+                  row_bytes: bytes) -> None:
+    """Перезапись строки таблицы по позиции (для регистров без _IDRREF).
+
+    Длина строки не меняется; позиция — индекс строки в data-объекте
+    (начиная с 0, включая служебные). Ошибки формата -> WriteError.
+    """
+    p = Path(path)
+    with Database1CD(p) as db:
+        if table_name not in db.tables:
+            raise WriteError(f'таблица не найдена: {table_name}')
+        t = db.tables[table_name]
+        if not t.data_page:
+            raise WriteError(f'таблица {table_name!r} без объекта данных '
+                             f'(data_page=0): обновление не поддерживается')
+        row_length = t.row_length or 1
+        if len(row_bytes) != row_length:
+            raise WriteError(f'длина строки {len(row_bytes)} != '
+                             f'row_length={row_length}')
+    _ensure_not_locked(p)
+    _, pages, _, data = _read_object_full(p, t.data_page)
+    if len(data) < (row_index + 1) * row_length:
+        raise WriteError(f'строка {row_index} вне данных таблицы {table_name!r}')
+    new_data = (data[:row_index * row_length] + row_bytes
+                + data[(row_index + 1) * row_length:])
+    n_pages = (len(new_data) + PAGE_SIZE - 1) // PAGE_SIZE
+    for j in range(n_pages):
+        _write_page(p, pages[j], new_data[j * PAGE_SIZE:(j + 1) * PAGE_SIZE])
+
+
+def update_record(path: str | Path, table_name: str, idref: bytes,
+                  row_bytes: bytes) -> bool:
+    """Перезапись существующей строки таблицы по _IDRREF (Фаза bridge).
+
+    Длина строки не меняется — переписываются только страницы данных объекта
+    (FAT и заголовок не трогаются). Строка не найдена (или _IDRREF = 0) ->
+    False. Таблица без объекта данных / без _IDRREF / неверная длина строки
+    -> WriteError. Открытая ИБ (1Cv8.1CL/1Cv8tmp*) -> LockError.
+    """
+    p = Path(path)
+    with Database1CD(p) as db:
+        if table_name not in db.tables:
+            raise WriteError(f'таблица не найдена: {table_name}')
+        t = db.tables[table_name]
+        if not t.data_page:
+            raise WriteError(f'таблица {table_name!r} без объекта данных '
+                             f'(data_page=0): обновление не поддерживается')
+        row_length = t.row_length or 1
+        if len(row_bytes) != row_length:
+            raise WriteError(f'длина строки {len(row_bytes)} != '
+                             f'row_length={row_length}')
+        idr = t.fields.get('_IDRREF')
+        if idr is None:
+            raise WriteError(f'таблица {table_name!r} без поля _IDRREF')
+        idx = -1
+        for i, row in enumerate(db.table_rows(t)):
+            if row[:1] == b'\x01' or len(row) < 16:
+                continue
+            if row[idr.offset:idr.offset + 16] == idref:
+                idx = i
+                break
+        if idx < 0:
+            return False
+    overwrite_row(p, table_name, idx, row_bytes)
+    return True
+
+
 def append_records(path: str | Path, table_name: str, rows: bytes) -> int:
     """Добавление строк в конец таблицы; возвращает новое число строк.
 
@@ -193,13 +264,11 @@ def append_records(path: str | Path, table_name: str, rows: bytes) -> int:
     for j in range(n_pages):
         _write_page(p, new_pages[j],
                     new_data[j * PAGE_SIZE:(j + 1) * PAGE_SIZE])
-    if fat_level == 0:
-        _write_object_header(p, t.data_page, new_pages, len(new_data))
-    elif fat_level == 1:
-        # indirect-страницы: page_size/4 номеров данных на страницу-указатель
+    entries = (PAGE_SIZE - PAGE_HEADER_SIZE) // 4
+    # переход fat_level 0 -> 1, если FAT не влезает в заголовок
+    if fat_level == 0 and n_pages > entries:
         per = PAGE_SIZE // 4
         n_ind = (n_pages + per - 1) // per
-        entries = (PAGE_SIZE - PAGE_HEADER_SIZE) // 4
         if n_ind > entries:
             raise WriteError(f'нужен fat_level 2 ({n_ind} indirect > {entries} '
                              f'слотов): таблица {table_name!r} слишком большая')
@@ -212,6 +281,26 @@ def append_records(path: str | Path, table_name: str, rows: bytes) -> int:
             new_ind.append(total)
             total += 1
         _write_object_header(p, t.data_page, new_ind, len(new_data),
+                             fat_level=1)
+    elif fat_level == 0:
+        _write_object_header(p, t.data_page, new_pages, len(new_data))
+    elif fat_level == 1:
+        # indirect-страницы: page_size/4 номеров данных на страницу-указатель
+        per = PAGE_SIZE // 4
+        n_ind = (n_pages + per - 1) // per
+        entries = (PAGE_SIZE - PAGE_HEADER_SIZE) // 4
+        if n_ind > entries:
+            raise WriteError(f'нужен fat_level 2 ({n_ind} indirect > {entries} '
+                             f'слотов): таблица {table_name!r} слишком большая')
+        new_ind1: list[int] = []
+        for k in range(n_ind):
+            ibuf = bytearray(PAGE_SIZE)
+            for j, pg in enumerate(new_pages[k * per:(k + 1) * per]):
+                struct.pack_into('<I', ibuf, 4 * j, pg)
+            _write_page(p, total, bytes(ibuf))
+            new_ind1.append(total)
+            total += 1
+        _write_object_header(p, t.data_page, new_ind1, len(new_data),
                              fat_level=1)
     else:
         raise WriteError(f'fat_level {fat_level} не поддерживается (0/1)')

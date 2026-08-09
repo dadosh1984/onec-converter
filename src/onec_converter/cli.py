@@ -757,6 +757,82 @@ def cmd_export_xlsx(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bridge_export(args: argparse.Namespace) -> int:
+    """Справочник/регистр источника -> xlsx-мост (аналог .epf макета)."""
+    from .bridge_export import export_bridge
+    from .epf_load import BridgeError
+
+    if not args.out:
+        return _err('укажите --out для XLSX')
+    try:
+        rep = export_bridge(args.source_dir, args.type, args.out,
+                            limit=args.limit)
+    except (BridgeError, OSError, ValueError) as exc:
+        return _err(str(exc))
+    print(json.dumps(rep, ensure_ascii=False, default=str))
+    return 0
+
+
+def cmd_bridge_import(args: argparse.Namespace) -> int:
+    """xlsx-мост -> копия приёмника (find-or-create по полям поиска)."""
+    from .epf_load import BridgeError, import_bridge
+
+    try:
+        rep = import_bridge(args.input, args.target_dir,
+                            workdir=args.workdir or None,
+                            snapshot=not args.no_snapshot)
+    except (BridgeError, OSError, ValueError) as exc:
+        return _err(str(exc))
+    print(json.dumps(rep, ensure_ascii=False, default=str))
+    return 0
+
+
+def cmd_bridge_verify(args: argparse.Namespace) -> int:
+    """Обратный контроль: выгрузить из КОПИИ приёмника в мост и сверить."""
+    from .bridge_verify import verify_roundtrip
+    from .epf_load import BridgeError
+
+    try:
+        rep = verify_roundtrip(args.target_dir, args.target_dir,
+                               args.type, args.input, workdir=args.workdir,
+                               limit=args.limit or None, key_col=args.key or '')
+    except (BridgeError, OSError, ValueError) as exc:
+        return _err(str(exc))
+    print(json.dumps(rep, ensure_ascii=False, default=str))
+    return 0 if rep.get('ok') else 1
+
+
+def cmd_xlsx_export(args: argparse.Namespace) -> int:
+    """Выгрузка пользовательских записей объекта в XLSX-мост (U27)."""
+    from .xlsx_bridge import export_object_xlsx
+
+    if not args.out:
+        return _err('укажите --out для XLSX')
+    try:
+        rep = export_object_xlsx(args.source_dir, args.table, args.out,
+                                 limit=args.limit, resolve_refs=args.resolve_refs,
+                                 obj_type=args.type)
+    except (KeyError, OSError, ValueError) as exc:
+        return _err(str(exc))
+    print(json.dumps(rep, ensure_ascii=False, default=str))
+    return 0
+
+
+def cmd_xlsx_to_intermediate(args: argparse.Namespace) -> int:
+    """Конвертация XLSX-шаблона приёмника в intermediate JSON (U27)."""
+    from .xlsx_bridge import ref_columns_for, xlsx_to_intermediate
+
+    if not args.out:
+        return _err('укажите --out для JSON')
+    ref_cols = ref_columns_for(args.target_dir, args.type) if args.target_dir else None
+    objs = xlsx_to_intermediate(args.input, args.type, ref_columns=ref_cols)
+    from .intermediate import save_json_stream
+    save_json_stream(objs, args.out)
+    print(json.dumps({'ok': True, 'objects': len(objs), 'out': args.out,
+                      'ref_columns': ref_cols or []}, ensure_ascii=False))
+    return 0
+
+
 def _notify(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     """Отправка уведомления по завершении load (best-effort, Фаза 27)."""
     from .notify import NotifyError, notify_telegram, send_webhook
@@ -1619,12 +1695,62 @@ def build_parser() -> argparse.ArgumentParser:
     p_dump.add_argument('--max-bytes', type=int, default=0,
                         help='Потоковый вывод: остановить после N байт (Фаза 49)')
 
+    p_bridge_export = sub.add_parser('bridge-export',
+                                    help='Справочник/регистр источника -> xlsx-мост (аналог epf-макета)')
+    p_bridge_export.add_argument('--source-dir', required=True)
+    p_bridge_export.add_argument('--type', required=True,
+                                 help='полное имя объекта, напр. Справочник.Банки')
+    p_bridge_export.add_argument('--limit', type=int, default=0)
+    p_bridge_export.add_argument('--out', default='', help='путь к .xlsx')
+
+    p_bridge_import = sub.add_parser('bridge-import',
+                                     help='xlsx-мост -> копия приёмника (find-or-create, только копии)')
+    p_bridge_import.add_argument('--input', required=True, help='путь к .xlsx')
+    p_bridge_import.add_argument('--target-dir', required=True,
+                                 help='каталог приёмника (1Cv8.1CD)')
+    p_bridge_import.add_argument('--workdir', default='',
+                                 help='куда класть копию результата')
+    p_bridge_import.add_argument('--no-snapshot', action='store_true')
+
+    p_bridge_verify = sub.add_parser('bridge-verify',
+                                     help='обратный контроль: сверить данные копии приёмника с мостом')
+    p_bridge_verify.add_argument('--input', required=True, help='исходный xlsx-мост')
+    p_bridge_verify.add_argument('--target-dir', required=True,
+                                 help='каталог КОПИИ приёмника (1Cv8.1CD)')
+    p_bridge_verify.add_argument('--type', default='',
+                                 help='полное имя объекта, напр. Справочник.Банки')
+    p_bridge_verify.add_argument('--workdir', default='',
+                                 help='куда класть временный обратный мост')
+    p_bridge_verify.add_argument('--limit', type=int, default=0)
+    p_bridge_verify.add_argument('--key', default='',
+                                 help='ключевая колонка сверки (по умолчанию поле поиска)')
+
     p_xlsx = sub.add_parser('export-xlsx',
                             help='Первые N строк таблицы 1CD в XLSX (Фаза 53 U11)')
     p_xlsx.add_argument('--source-dir', required=True)
     p_xlsx.add_argument('--table', required=True)
     p_xlsx.add_argument('--limit', type=int, default=1000)
     p_xlsx.add_argument('--out', default='', help='путь к .xlsx')
+
+    p_xlsx = sub.add_parser('xlsx-export',
+                            help='Выгрузка пользовательских записей объекта в XLSX-мост (U27)')
+    p_xlsx.add_argument('--source-dir', required=True)
+    p_xlsx.add_argument('--table', required=True)
+    p_xlsx.add_argument('--limit', type=int, default=0)
+    p_xlsx.add_argument('--out', default='', help='путь к .xlsx')
+    p_xlsx.add_argument('--resolve-refs', action='store_true',
+                        help='разрешать ссылки в наименования (по умолчанию нет)')
+    p_xlsx.add_argument('--type', default='',
+                        help='тип объекта источника, напр. Справочник.Банки (для Родителя)')
+
+    p_xlsx2j = sub.add_parser('xlsx-to-intermediate',
+                              help='Конвертация XLSX-шаблона приёмника в intermediate JSON (U27)')
+    p_xlsx2j.add_argument('--input', required=True, help='путь к .xlsx')
+    p_xlsx2j.add_argument('--type', required=True,
+                          help='тип объекта приёмника, напр. Справочник.Банки')
+    p_xlsx2j.add_argument('--target-dir', default='',
+                          help='каталог приёмника (для авто-определения ref-колонок)')
+    p_xlsx2j.add_argument('--out', required=True, help='путь к .json')
 
     p_stats = sub.add_parser('stats',
                              help='Сводка по ИБ 1CD: таблицы/строки/объём/locale (Фаза 53 U16)')
@@ -1816,7 +1942,12 @@ def main(argv: list[str] | None = None) -> int:
         'verify': cmd_verify,
         'rules-diff': cmd_rules_diff,
         'pii-report': cmd_pii_report,
+        'xlsx-export': cmd_xlsx_export,
+        'xlsx-to-intermediate': cmd_xlsx_to_intermediate,
         'export-xlsx': cmd_export_xlsx,
+        'bridge-export': cmd_bridge_export,
+        'bridge-import': cmd_bridge_import,
+        'bridge-verify': cmd_bridge_verify,
         'stats': cmd_stats,
         'mcp': cmd_mcp,
         'migrate': cmd_migrate,
