@@ -3,6 +3,19 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.20.0 (2026-08)
+
+### Безопасность и комплаенс (Фаза 37)
+- pii_scanner.py: ИНН/СНИЛС/карты (Луна)/телефоны (РФ и UZ)/ПИНФЛ/e-mail,
+  scan_text/scan_record/field_is_pii, профиль UZ (152 УЗ).
+- audit: tamper-evident JSONL — SHA-256 hash-цепочка (prev_hash/hash) +
+  verify_audit; pii_masking (автоскрытие ПДн в obj/detail/guid).
+- РБАС MCP (env ONEC_MCP_ROLE=inspect|load): тул load_direct требует роль
+  load; иначе RbacError.
+- gdpr_152_report.py + CLI pii-report --audit-file [--rules-file --profile]:
+  отчёт для службы безопасности (поля, алгоритмы, где логи).
+- Ворота: pytest (+10), conformance, ruff, mypy (48), check_bsl, vitest.
+
 ## 0.19.0 (2026-08)
 
 ### SQL-источники PostgreSQL / MS SQL (Фаза 36)

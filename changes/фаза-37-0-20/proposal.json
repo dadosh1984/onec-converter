@@ -1,0 +1,16 @@
+{
+  "title": "фаза-37-0-20",
+  "goal": "Фаза 37 (0.20.0) — Безопасность и комплаенс onec-converter: (1) pii_scanner.py: глубокий поиск ПДн — ИНН (12/10), СНИЛС (3-3-3-2), номера карт (16, Luhn), телефоны (RU и UZ '+998'), скан по строке/полю; профиль UZ (ИНН/ПИНФЛ 14); функция scan_text/scan_record. (2) audit: анонимизация obj/detail при включённой анонимизации — если Anonymizer active, журнал не должен быть отдельным каналом утечки: hide фрагменты ИНН/СНИЛС/тел в obj/detail; (3) tamper-evident audit: SHA-256 hash-цепочка в JSONL (добавить поле 'prev_hash' и 'hash' в record) — защита от подделки; (4) gdpr_152_report.py: отчёт об анонимизации — какие поля, каким алгоритмом (маскирование/шифрование), где логи (импорт из audit); PDF/JSON; CLI-команда `pii-report`/в существующей audit; (5) rbac_mcp: роли клиентов MCP — по env ONEC_MCP_ROLE (inspect|load): тул load_direct требует role=load, остальные любым; проверка в mcp_server. Тесты: pii_scanner (ИНН/СНИЛС/карты/тел/UZ), audit tamper jsonl hash-цепочка, rbac (недостаточная роль → ошибка), transform/audit анонимизация. CHANGELOG 0.20.0, план ✅, релиз.",
+  "platform": "тесты в E:\\test через gates.sh; версия 0.20.0; mypy только src",
+  "constraints": "compact",
+  "budget": "compact",
+  "clarity": "vague",
+  "language": "ru",
+  "appliesLessons": [
+    "фазу-25-audit-логирование:forge:7c216dc57da7",
+    "фазу-23-conformance-тесты:forge:753265ca3073",
+    "фазу-25-audit-логирование:forge:4a67fe76ecf6",
+    "фазу-25-audit-логирование:forge:919b9b494e28",
+    "фазу-24-полный-сценарий:forge:1b6dbaa2498b"
+  ]
+}

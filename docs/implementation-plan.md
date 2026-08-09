@@ -298,16 +298,13 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 - [x] [assumption] ворота зелёные; релиз 0.19.0
 ## Фаза 37 — Безопасность и комплаенс (0.20.0)
 
-- [ ] [fact] pii_scanner: ИНН/СНИЛС/карты/телефоны; профиль UZ
-      (ИНН/ПИНФЛ) в PII_PROFILES
-- [ ] [fact] audit: анонимизация obj/detail при включённой анонимизации
-      (не отдельный канал утечки ПДн)
-- [ ] [fact] tamper-evident audit: SHA-256 хэш-цепочка в JSONL
-- [ ] [fact] gdpr_152_report: отчёт — какие поля анонимизированы, каким
-      алгоритмом, где логи
-- [ ] [fact] rbac_mcp: роли клиентов MCP (inspect-only / load)
-- [ ] [assumption] ворота зелёные; релиз 0.20.0
-
+- [x] [fact] pii_scanner.py: ИНН/СНИЛС/карты/тел (RU+UZ)/ПИНФЛ/e-mail;
+      scan_text/scan_record/field_is_pii; профиль UZ
+- [x] [fact] audit: tamper-evident (SHA-256 hash-цепочка + verify_audit);
+      pii_masking (скрытие ПДн в obj/detail/guid)
+- [x] [fact] gdpr_152_report.py + CLI pii-report
+- [x] [fact] rbac_mcp: ONEC_MCP_ROLE, load_direct требует load
+- [x] [assumption] ворота зелёные; релиз 0.20.0
 ## Фаза 38 — Мониторинг и DevOps (0.21.0)
 
 - [ ] [fact] prometheus_exporter: строк/сек, ошибки, объёмы (кроме

@@ -348,6 +348,19 @@ def cmd_export_kd3(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pii_report(args: argparse.Namespace) -> int:
+    """Отчёт по анонимизации ПДн (152-ФЗ / 152 УЗ), Фаза 37."""
+    from .gdpr_152_report import PiiReportError, gdpr_report
+
+    try:
+        rep = gdpr_report(args.audit_file, args.rules_file or None,
+                          profile=args.profile)
+    except PiiReportError as exc:
+        return _err(str(exc))
+    print(json.dumps(rep, ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_mint_token(args: argparse.Namespace) -> int:
     """Выпуск локального Bearer-токена (HS256 JWT) на общем секрете (Фаза 33).
 
@@ -770,6 +783,8 @@ def build_parser() -> argparse.ArgumentParser:
                            help='источник: файл 1CD или SQL-ИБ (Фаза 36)')
     p_extract.add_argument('--source-url', default='',
                            help='DSN/URL подключения к SQL-ИБ (при --source-kind)')
+    p_extract.add_argument('--pii-masking', action='store_true',
+                           help='скрывать ПДн (ИНН/СНИЛС/тел) в журнале аудита (Фаза 37)')
 
     p_map = sub.add_parser('map', help='Правила маппинга (TOON)')
     p_map.add_argument('--rules-file', default='')
@@ -785,6 +800,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_transform.add_argument('--preview', type=int, default=0)
     p_transform.add_argument('--audit-file', default='',
                              help='JSONL-журнал аудита переноса (Фаза 25)')
+    p_transform.add_argument('--pii-masking', action='store_true',
+                             help='скрывать ПДн в журнале аудита (Фаза 37)')
 
     p_load = sub.add_parser('load', help='Загрузка в приёмник (файл/HTTP/прямая запись)')
     p_load.add_argument('--input', required=True)
@@ -814,6 +831,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help='общий секрет для локального mint-token (HS256 JWT, Фаза 33)')
     p_load.add_argument('--index-repair', action='store_true',
                         help='сгенерировать скрипт восстановления индексов (--direct, Фаза 34)')
+    p_load.add_argument('--pii-masking', action='store_true',
+                        help='скрывать ПДн в журнале аудита (Фаза 37)')
     p_load.add_argument('--retries', type=int, default=0,
                         help='число повторов HTTP (0 = из конфига/по умолчанию)')
     p_load.add_argument('--audit-file', default='',
@@ -922,6 +941,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_mint.add_argument('--exp-min', type=int, default=60,
                         help='срок жизни в минутах')
 
+    p_pii = sub.add_parser('pii-report',
+                           help='Отчёт по анонимизации ПДн (152-ФЗ/152 УЗ, Фаза 37)')
+    p_pii.add_argument('--audit-file', required=True,
+                       help='JSONL-журнал аудита')
+    p_pii.add_argument('--rules-file', default='',
+                       help='файл правил TOON (для перечня полей)')
+    p_pii.add_argument('--profile', default='RU', choices=['RU', 'UZ'],
+                       help='профиль ПДн (RU/152-ФЗ или UZ/152 УЗ)')
+
     return p
 
 
@@ -930,7 +958,7 @@ def main(argv: list[str] | None = None) -> int:
     # аудит (Фаза 25): файл из --audit-file или ONEC_AUDIT_FILE (для MCP)
     audit_file = getattr(args, 'audit_file', '') or os.environ.get('ONEC_AUDIT_FILE', '')
     if audit_file:
-        set_audit(audit_file)
+        set_audit(audit_file, pii_masking=getattr(args, 'pii_masking', False))
     handlers: dict[str, Callable[[argparse.Namespace], int]] = {
         'inspect': cmd_inspect,
         'extract': cmd_extract,
@@ -953,6 +981,7 @@ def main(argv: list[str] | None = None) -> int:
         'sonar-report': cmd_sonar_report,
         'export-kd3': cmd_export_kd3,
         'mint-token': cmd_mint_token,
+        'pii-report': cmd_pii_report,
     }
     try:
         handler = handlers.get(args.command or '')

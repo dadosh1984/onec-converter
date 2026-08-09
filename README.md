@@ -211,7 +211,23 @@ onec-converter audit --file audit.jsonl --level ERROR --op load   # фильтр
 ```
 JSONL-журнал: время, уровень, операция, объект, GUID приёмника, правило,
 результат (ПДн-аудит «кто/что/когда»). Для MCP — `ONEC_AUDIT_FILE` при
-старте сервера.
+старте сервера. Журнал tamper-evident: каждая запись содержит `prev_hash`/
+`hash` (SHA-256 цепочка) — проверка `verify_audit`; при `--pii-masking`
+фрагменты ИНН/СНИЛС/тел в журнале скрываются.
+
+### pii-report — отчёт по анонимизации ПДн (Фаза 37)
+```
+onec-converter pii-report --audit-file audit.jsonl --rules-file rules.json
+# {profile, generated, pii_fields, algorithms, tamper_evident, audit_file}
+```
+Сводка для службы безопасности (152-ФЗ / 152 УЗ): какие поля были
+анонимизированы, каким алгоритмом и где хранятся логи.
+
+### RBAC в MCP (Фаза 37)
+Роль клиента задаётся env `ONEC_MCP_ROLE` (`inspect` — только чтение,
+`load` — полный доступ). Тул `load_direct` (прямая запись в 1CD) требует
+роль `load`; read-only тулы (inspect/search_schema/query_sql/...) доступны
+любой роли.
 
 ### status — состояние пайплайна
 ```

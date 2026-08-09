@@ -82,6 +82,31 @@ def _playbook_summary() -> str:
     return ' → '.join(p['command'].split('(')[0] for p in PLAYBOOK)
 
 
+def _current_role() -> str:
+    """Роль MCP-клиента: env ONEC_MCP_ROLE (inspect|load), по умолчанию 'load'
+    (максимальная, backward-compat) если переменная пустая/не задана."""
+    import os
+
+    return os.environ.get('ONEC_MCP_ROLE', 'load') or 'load'
+
+
+def _require_role(role: str, tool: str) -> None:
+    """Проверка роли клиента для опасного тула (RBAC, Фаза 37).
+
+    Роль 'load' — полный доступ; 'inspect' — только чтение. Если
+    недостаточно — поднимает RbacError с понятным сообщением.
+    """
+    got = _current_role()
+    if role == 'load' and got != 'load':
+        raise RbacError(
+            f'тул {tool} требует роль load, а клиент: {got}. '
+            f'Задайте ONEC_MCP_ROLE=load или используйте read-only тулы.')
+
+
+class RbacError(Exception):
+    """Недостаточно прав роли MCP-клиента."""
+
+
 def visible_tool(name: str, description: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Декоратор тула: логирует применение команды в терминал (stderr)
     и регистрирует тул в FastMCP. Ответ дополняется полем `next`
@@ -562,8 +587,10 @@ def load_direct(target_dir: str, input_file: str, workdir: str = '',
     Оригинал не изменяется; копия создаётся в workdir (или temp). До записи
     сохраняется workdir/snapshot.1CD (откат при сбое, Фаза 24);
     no_snapshot=true отключает. Возвращает {ok, copy_path, total, tables,
-    snapshot}. Ограничения MVP — docs/zero-setup.md.
+    snapshot}. Роль клиента (RBAC, Фаза 37): требует ONEC_MCP_ROLE=load
+    (запись). Ограничения MVP — docs/zero-setup.md.
     """
+    _require_role('load', 'load_direct')
     from .intermediate import load_json_batch
     from .load_8x import LoadError
     from .load_8x import load_direct as _load_direct
