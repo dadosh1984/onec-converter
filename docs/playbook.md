@@ -1,9 +1,15 @@
 # Плейбук MCP-сервера onec-converter
 
-Универсальная последовательность команд, которую сервер применяет для переноса
-данных между ИБ 1С. Ответ **каждого** тула содержит поле `next` — следующую
-рекомендуемую команду, поэтому агент (LLM) движется по плейбуку автоматически.
-Полный список всегда доступен через тул `playbook()`.
+Универсальная последовательность команд, которую агент (LLM) применяет для
+переноса данных между ИБ 1С. Ответ **каждого** тула содержит поле `next` —
+следующую рекомендуемую команду, поэтому агент движется по плейбуку
+автоматически. Полный список всегда доступен через тул `playbook()`.
+
+Сервер отдаёт **18 тулов**: разведка → сравнение/маппинг → перенос одной
+командой (`migrate`) либо прямая запись (`load_direct`) → сверка полноты.
+Все шаги пайплайна переноса (init → inspect_source → extract → map → transform
+→ prevalidate → load) выполняются **внутри тула `migrate()`**, отдельными
+MCP-тулами они не выставляются.
 
 ## Видимость в терминале
 
@@ -15,65 +21,62 @@
 [onec-converter 17:38:13] ✔ table_sizes (82 ms) — ok=True, count=75
 [onec-converter 17:38:13] ▶ search_schema(1C_8.1, Зарплат)
 [onec-converter 17:38:13] ✔ search_schema (6 ms) — ok=True, objects=[...]
-[onec-converter 17:38:14] ✘ query_table — таблица не найдена: _XXX
+[onec-converter 17:38:14] ✘ query_sql — таблица не найдена: _XXX
 ```
 
 Маркеры: `▶` — команда начата, `✔` — успех (время + краткое резюме),
-`✘` — ошибка. Запуск сервера: `python -m onec_converter.mcp_server`.
+`✘` — ошибка. Запуск сервера: `onec-converter mcp --stdio`.
 
-## Универсальная последовательность (16 шагов)
+## Универсальная последовательность (реальные тулы)
 
 | # | Команда | Цель |
 |---|---------|------|
-| 1 | `tools()` | Список доступных команд |
+| 1 | `tools()` | Список доступных команд сервера |
 | 2 | `pipeline_status()` | Состояние пайплайна: коннекторы, кеш, timings |
-| 3 | `search_schema(source_dir, '<имя>')` | Найти таблицы метаданных по имени/синониму |
-| 4 | `table_sizes(source_dir, '<фильтр>')` | Объём: строки и байты по таблицам |
-| 5 | `compare_structures(source_dir, target_dir)` | Расхождения структур источника и приёмника |
-| 6 | `step_init(project_dir, source_ib_id, target_ib_id, source_dir, source_encoding='cp866')` | Привязка пары 1→1 |
-| 7 | `step_inspect_source()` | Метаданные источника |
-| 8 | `step_inspect_target(target_metadata)` | Структура приёмника (HTTP-расширение 8.3) |
-| 9 | `step_map(meta_source, meta_target, rules)` | Валидация TOON-правил + промпт LLM |
-| 10 | `query_sql(source_dir, table, where, limit)` | Выборочная проверка данных |
-| 11 | `step_extract(out_file)` | Извлечение данных в intermediate JSON |
-| 12 | `step_prevalidate()` | Контроль количества/ссылок/дубликатов |
-| 13 | `transform` → `preview` | Применение правил, dry-run |
-| 14 | `step_load(http_load)` | Запись в приёмник через HTTP-сервис |
-| 15 | `verify` | Сверка источник↔приёмник (полнота) |
-| 16 | `pipeline_status()` | Итоговое состояние + метрики |
+| 3 | `search_schema(source_dir, '<имя>')` | Найти объекты/таблицы метаданных по имени/синониму |
+| 4 | `base_health(source_dir)` | Версия, таблицы/строки, блокировки, свободное место |
+| 5 | `table_sizes(source_dir, '<фильтр>')` | Объём: строки и байты по таблицам |
+| 6 | `compare_structures(source_dir, target_dir)` | Расхождения структур источника и приёмника |
+| 7 | `explain_diff(source_dir, target_dir)` | Причины расхождений |
+| 8 | `auto_map_schemas(source_dir, target_dir)` | Автогенерация полей маппинга (TOON) |
+| 9 | `query_sql(source_dir, table, where, limit)` | Выборочная проверка записи |
+| 10 | `compress_metadata(source_dir)` | Краткое саммари метаданных для LLM |
+| 11 | `migrate(project_dir, source_ib_id, target_ib_id, source_dir, target_url, rules, out_file, source_encoding)` | **СКВОЗНОЙ перенос** — внутри: init→inspect→extract→map→transform→prevalidate→load |
+| 12 | `load_direct(target_dir, input_file, workdir)` | Прямая запись объектов в КОПИЮ 1Cv8.1CD (без HTTP) |
+| 13 | `guid_diff(source_dir, target_dir)` | Сверка по GUID: полнота объектов и таблиц |
+| 14 | `audit_verify(audit_file)` | Целостность audit-журнала (хеш-цепочка) |
+| 15 | `config_versions(source_dir)` | Версии конфигурации, дифф CONFIG↔CONFIGSAVE |
+| 16 | `dump_metadata(source_dir)` | Дамп метаданных в git-дружественный текст |
+| 17 | `cache_stats()` | Метрики дискового кеша |
+| 18 | `pipeline_status()` | Итог + метрики времени |
 
 Правила плейбука:
-- шаги 1–5 — **разведка**, обязательны: без них не знаем, что и сколько переносить;
-- шаг 6 — **инициализация**: правило 1→1 блокирует загрузку при несовпадении пары;
-- шаги 7–9 — **схема и правила**: LLM генерирует TOON-правила по метаданным;
-- шаги 10–12 — **данные**: контроль до записи;
-- шаги 13–16 — **загрузка и сверка**.
+- шаги 1–10 — **разведка и правила**: без неё не знаем, что и сколько переносить,
+  и какие поля маппить;
+- шаг 11 — **перенос** одной командой `migrate()` (правило 1→1 фиксируется
+  внутри по project_dir/binding); либо без HTTP — шаг 12 `load_direct` в копию;
+- шаги 13–16 — **сверка и безопасность**: полнота по GUID, целостность журнала,
+  версии конфигурации;
+- шаги 17–18 — метрики и итог.
 
 ## Пример: начисления заработной платы 8.1 → 8.3
 
 Пользователь: «перенеси данные по начислению заработных плат из ИБ 1С 8.1 на
-ИБ 1С 8.3». Сервер идёт по плейбуку:
+ИБ 1С 8.3». Агент идёт по плейбуку на реальных тулах:
 
 ```
-1. tools()                                    → список команд
-2. pipeline_status()                          → пайплайн чист, кеш пуст
-3. search_schema('1C_8.1', 'Зарплат')         → Справочник.СчетаРасходовДляЗарплаты (_REFERENCE4319)…
-   search_schema('1C_8.1', 'Сотрудник')       → Справочник.Сотрудники (REFERENCE…)
-   search_schema('1C_8.1', 'Начисление')      → Документ.НачислениеЗарплаты (+ табличная часть)
-4. table_sizes('1C_8.1', 'Reference')         → 75 таблиц, крупнейшие — сотрудники/начисления
-5. compare_structures('1C_8.1', '1C_8.3')     → какие объекты отсутствуют в 8.3 (виды расчёта и т.п.)
-6. step_init(project, '8.1', '8.3', '1C_8.1', 'cp866')
-7. step_inspect_source()                      → справочники/документы источника
-8. step_inspect_target(metadata_8_3)          → структура приёмника
-9. step_map(meta_src, meta_tgt, rules)        → правила «Сотрудники→Сотрудники»,
-                                                «НачислениеЗарплаты→НачислениеЗарплаты»
-10. query_sql('1C_8.1', '_REFERENCE…', where='_DESCRIPTION=Иванов')  → контроль записи
-11. step_extract('out/intermediate.json')     → данные источника
-12. step_prevalidate()                        → N объектов, ссылки целы, дубликатов нет
-13. transform → preview                       → dry-run на приёмнике
-14. step_load(http_load)                      → загрузка в 8.3
-15. verify                                    → сверка: количество/суммы совпадают
-16. pipeline_status()                         → итог + timings
+1. tools()                                        → список команд
+2. pipeline_status()                              → пайплайн чист, кеш пуст
+3. search_schema('1C_8.1', 'Зарплат')             → Справочник.СчетаРасходовДляЗарплаты…
+   search_schema('1C_8.1', 'Начисление')          → Документ.НачислениеЗарплаты
+4. table_sizes('1C_8.1', 'Reference')             → 75 таблиц, крупнейшие — сотрудники
+5. compare_structures('1C_8.1', '1C_8.3')         → какие объекты отсутствуют в 8.3
+6. auto_map_schemas('1C_8.1', '1C_8.3')           → правила «Сотрудники→Сотрудники»
+7. query_sql('1C_8.1', '_REFERENCE…', where='_NAME=Иванов')  → контроль записи
+8. migrate(project, '8.1', '8.3', '1C_8.1', target_url='http://…',
+           rules='<TOON-правила>')                → СКВОЗНОЙ перенос данных
+9. guid_diff('1C_8.1', '1C_8.3')                  → сверка полноты по GUID
+10. pipeline_status()                             → итог + timings
 ```
 
 Агент на каждом шаге читает `next` из ответа и продолжает; пользователь видит
@@ -118,21 +121,4 @@ Conformance — проверка, что сервер честно следуе�
 
 JSONL-журнал операций миграции: время, уровень (INFO/WARN/ERROR), операция
 (extract/transform/load), объект, GUID приёмника, правило, результат.
-Записывают: `load_direct` (каждый перенесённый объект + сводка + WARN по
-ненайденным ссылкам), `transform`/`extract` (CLI), MCP `step_extract`.
-
-```bash
-# включить журнал (--audit-file на extract/transform/load; для MCP — env
-# ONEC_AUDIT_FILE при старте сервера)
-onec-converter load --direct ./tgt --input batch.json --workdir ./work \
-    --audit-file audit.jsonl
-
-# просмотр/фильтр: --level INFO|WARN|ERROR, --op, --obj, --tail N, --json
-onec-converter audit --file audit.jsonl --level ERROR --op load
-```
-
-Формат записи (JSONL, одна строка — одно событие):
-`{"ts": "...", "level": "INFO", "operation": "load", "obj": "Справочник.Банки",
- "guid": "16-байт GUID приёмника", "rule": "", "result": "ok", "detail": ""}`
-
-Журнал append-only, пригоден для разбора внешними инструментами.
+Проверка целостности — тул `audit_verify`.

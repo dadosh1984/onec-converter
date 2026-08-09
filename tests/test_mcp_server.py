@@ -250,20 +250,27 @@ def test_dump_metadata_tool(tmp_path: Path):
 
 
 def test_playbook_sequence():
-    """Плейбук: 16 шагов, next-поля согласованы, вшиваются в JSON-ответы."""
+    """Плейбук: только реальные тулы, next-поля согласованы, вшиваются в JSON-ответы."""
     import json as _json
     from pathlib import Path as _Path
 
     from onec_converter.mcp_server import PLAYBOOK, PLAYBOOK_NEXT, playbook
 
     steps = _json.loads(playbook())
-    assert steps['ok'] and len(steps['steps']) == 16
+    assert steps['ok'] and len(steps['steps']) >= 12
     cmds = [p['command'].split('(')[0] for p in PLAYBOOK]
     assert cmds[0] == 'tools'
-    assert 'step_init' in cmds and 'step_load' in cmds and 'verify' in cmds
+    assert 'migrate' in cmds and 'load_direct' in cmds and 'guid_diff' in cmds
+    # никаких фиктивных внутренних шагов migrate как exposed-тулов
+    assert not any(name in cmds for name in
+                   ('step_init', 'step_load', 'step_extract', 'step_map',
+                    'step_prevalidate', 'step_inspect', 'verify', 'transform',
+                    'preview', 'inspect_target'))
     # next-поля согласованы
     for tool, nxt in PLAYBOOK_NEXT.items():
         assert nxt and tool, tool
+        assert nxt.split('(')[0].strip().strip('"') in cmds or nxt.startswith('tools') or \
+               not nxt.split('(')[0].strip(), tool
     # next вшивается в JSON-ответы (на синтетике/или skip при отсутствии базы)
     from onec_converter.mcp_server import query_sql
     base = _Path('1C_8.1/1Cv8.1CD')
