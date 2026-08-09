@@ -952,6 +952,15 @@ def server_main(transport: str = 'stdio') -> None:
     При старте в stderr печатается версия релиза и (если есть) уведомление
     о доступной новой версии на PyPI (см. version_check).
     """
+    import logging as _logging
+
+    # MCP SDK логирует INFO-сообщения ('Processing request…') в stderr, что
+    # мешает читать баннер версии; снижаем громкость до WARNING (пи/Claude
+    # читают stderr процесса как диагностику).
+    for _lg in ('mcp', 'mcp.server.server', 'mcp.server.session'):
+        _logger = _logging.getLogger(_lg)
+        if _logger.level < _logging.WARNING:
+            _logger.setLevel(_logging.WARNING)
     try:
         from .version_check import print_version_to_stderr
 
