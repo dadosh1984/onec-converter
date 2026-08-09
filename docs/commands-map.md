@@ -1,9 +1,9 @@
 # Карта команд onec-converter (Фаза 29.1)
 
-Сгенерировано из фактического реестра: CLI 31 подкоманда, MCP 18 тулов.
+Сгенерировано из фактического реестра: CLI 33 подкоманды, MCP 18 тулов.
 Поток данных: inspect → extract → map → transform → load → verify.
 
-## CLI (31)
+## CLI (33)
 
 | Команда | Вход | Выход | Назначение |
 |---|---|---|---|
@@ -33,11 +33,12 @@
 | mcp | — | тулы | список MCP-тулов сервера |
 | export-xlsx | source_dir, table | xlsx | экспорт N строк таблицы в Excel |
 | shell | source-dir | REPL | интерактивное исследование базы (tables/query, Фаза 39) |
+| migrate | source-dir, out | JSON/direct | сквозной перенос одной командой: extract→transform→load (Фаза 56) |
+| wizard | (интерактив) | команда | мастер переноса, собирает и запускает migrate (Фаза 56) |
 | audit-verify | audit.jsonl | rc | проверка tamper-evident цепочки (+ --cross-files, Фаза 42) |
 | ai-map | source+target dir | rules | авто-маппинг схем -> правила TOON (Фаза 45) |
 | ai-explain | source+target dir | текст | причины расхождений структур (Фаза 45) |
-| verify | --input --target | rc/json | сверка источник↔приёмник, отчёт для CI (Фаза 48) |
-| rules-diff | --a --b | rc | сравнение двух правил TOON (Фаза 48) |
+| verify | --input --target | rc/json | сверка источник↔приёмник, отчёт для CI (Фаза 48) || rules-diff | --a --b | rc | сравнение двух правил TOON (Фаза 48) |
 
 Общие флаги: `--source-dir`, `--out`, `--format json|xlsx`, `--audit-file`.
 

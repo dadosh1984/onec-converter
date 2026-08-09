@@ -27,15 +27,17 @@ def test_cli_registry_consistent():
     src = Path('src/onec_converter/cli.py').read_text(encoding='utf-8')
     subs = set(re.findall(r"add_parser\('([^']+)'", src))
     handlers = {m[0] for m in re.findall(r"'([^']+)': (cmd_\w+)", src)}
-    assert len(subs) == len(handlers) == 31  # нет «мёртвых» команд
+    assert len(subs) == len(handlers) == 33  # нет «мёртвых» команд
     assert subs == handlers  # каждая подкоманда имеет обработчик и наоборот
     assert 'load' in subs and 'transform' in subs and 'export-kd3' in subs
+    assert 'migrate' in subs and 'wizard' in subs
 
 
 def test_commands_map_exists():
     doc = Path('docs/commands-map.md').read_text(encoding='utf-8')
-    assert 'CLI (31)' in doc and 'MCP (18 тулов)' in doc
+    assert 'CLI (33)' in doc and 'MCP (18 тулов)' in doc
     assert 'export-kd3' in doc and 'base_health' in doc
+    assert 'migrate' in doc and 'wizard' in doc
     assert 'compress_metadata' in doc and 'audit_verify' in doc and 'cache_stats' in doc
     assert 'query_table' not in doc  # дубль удалён в 29.1
 

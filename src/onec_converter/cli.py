@@ -664,8 +664,15 @@ def cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_mcp(_args: argparse.Namespace) -> int:
-    """Список MCP-тулов сервера (Фаза 53, U15)."""
+def cmd_mcp(args: argparse.Namespace) -> int:
+    """MCP: список тулов (по умолчанию) или запуск сервера --stdio/--sse
+    (аудит раунда 6, C1/U15)."""
+    if getattr(args, 'stdio', False) or getattr(args, 'sse', False):
+        from .mcp_server import server_main
+
+        transport = 'sse' if getattr(args, 'sse', False) else 'stdio'
+        server_main(transport)
+        return 0
     from .mcp_server import mcp
 
     tools = mcp._tool_manager.list_tools()
@@ -1207,6 +1214,115 @@ def cmd_audit_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---- Фаза 56: CLI-пайплайн migrate + wizard ----------------
+
+def _extract_for_migrate(source_dir: str, encoding: str, specs: list[Any],
+                         workers: int) -> list[dict[str, Any]]:
+    """Извлечение объектов для migrate: оба формата 7.7/8.x."""
+    ver = _detect_version(source_dir)
+    if ver == '77':
+        return _extract_77(source_dir, encoding, 0, specs)
+    return _extract_8x(source_dir, 0, specs, workers=workers)
+
+
+def cmd_migrate(args: argparse.Namespace) -> int:
+    """Сквозной перенос одной командой (аудит раунда 6, C4):
+    extract → transform (правила) → load (файл или --direct).
+    В отличие от MCP migrate (HTTP), здесь любые источники 7.7/8.x и
+    прямая запись в копию 1CD. Если --rules не задан — данные извлекаются
+    и грузятся без трансформации."""
+    from .config import ProjectConfig
+    from .load_8x import LoadError, load_direct
+    from .transform import TransformError, transform_object
+
+    src = Path(args.source_dir)
+    if not src.is_dir():
+        return _err(f'источник не каталог: {args.source_dir}')
+    cfg = ProjectConfig.load()
+    encoding = args.source_encoding or cfg.source_encoding or 'cp866'
+    t0 = time.perf_counter()
+    try:
+        objs = _extract_for_migrate(str(src), encoding, [], args.workers)
+    except CLIError as exc:
+        return _err(str(exc))
+    if not objs:
+        return _err('не извлечено ни одного объекта')
+    _done_note(f'извлечено: {len(objs)} объектов', t0)
+
+    if args.rules:
+        try:
+            rules = load_rules(args.rules)
+        except MappingError as exc:
+            return _err(f'migrate: правила: {exc}')
+        rule_map = {r['source']: r for r in rules.get('objects', [])}
+        out: list[dict[str, Any]] = []
+        problems = 0
+        for obj in objs:
+            rule = rule_map.get(obj.get('type', ''))
+            if rule is None:
+                problems += 1
+                continue
+            try:
+                out.append(transform_object(obj, rule, None, rules.get('enums')))  # type: ignore[arg-type]
+            except TransformError:
+                problems += 1
+        objs = out
+        _done_note(f'преобразовано: {len(objs)} объектов'
+                   + (f' (без правила: {problems})' if problems else ''), t0)
+
+    if args.direct:
+        try:
+            rep = load_direct(args.direct, objs, workdir=args.workdir or None,
+                              snapshot=not args.no_snapshot)
+        except LoadError as exc:
+            return _err(f'migrate: запись: {exc}')
+        print(json.dumps(rep, ensure_ascii=False, default=str))
+        _done_note(f'загружено direct: {rep.get("total", 0)}', t0)
+        return 0
+    target = Path(args.out)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    save_json_batch(objs, target)
+    print(json.dumps({'ok': True, 'objects': len(objs), 'file': str(target)},
+                     ensure_ascii=False))
+    _done_note(f'загружено в файл: {target}', t0)
+    return 0
+
+
+def cmd_wizard(args: argparse.Namespace) -> int:
+    """Интерактивный мастер переноса (аудит раунда 6, G2): задаёт пару
+    вопросов и собирает/запускает команду migrate, не заменяя
+    низкоуровневые команды."""
+    import shlex
+
+    def ask(prompt: str, default: str = '') -> str:
+        suff = f'  [{default}]' if default else ''
+        try:
+            v = input(f'{prompt}{suff}: ').strip()
+        except EOFError:
+            return ''
+        return v or default
+
+    print('onec-converter wizard — перенос между ИБ 1С\n')
+    src = ask('Каталог источника (1Cv8.1CD / 1Cv7.dat)', os.getcwd())
+    enc = ask('Кодировка источника (7.7: cp866/cp1251; 8.x: не важно)', 'cp866')
+    rules = ask('Файл правил TOON rules.json (пусто — без трансформации)', '')
+    direct = ask('Каталог приёмника для прямой записи 1CD (пусто — файл)', '')
+    outp = ask('Файл промежуточного JSON', 'migrate-out.json')
+    workers = ask('Потоков чтения для 8.x (1-8)', '2')
+
+    argv = ['migrate', '--source-dir', src, '--source-encoding', enc,
+            '--out', outp, '--workers', workers]
+    if rules:
+        argv += ['--rules', rules]
+    if direct:
+        argv += ['--direct', direct]
+    print('\nВыполняю: onec-converter ' + ' '.join(shlex.quote(c) for c in argv))
+    if getattr(args, 'no_run', False):
+        print('(режим --no-run: команда не выполняется)')
+        return 0
+    return main(argv)
+
+
 # ---- entry point ----
 
 # Категории подкоманд для сгруппированного --help (аудит раунда 6, G1/G3/F4):
@@ -1219,6 +1335,7 @@ COMMAND_CATEGORIES: dict[str, str] = {
     # Перенос: полный цикл
     'extract': 'Перенос', 'map': 'Перенос', 'transform': 'Перенос',
     'load': 'Перенос', 'migrate': 'Перенос',
+    'wizard': 'Перенос',
     # Проверка
     'verify': 'Проверка', 'rules-diff': 'Проверка', 'audit-verify': 'Проверка',
     'clone-db': 'Проверка',
@@ -1382,6 +1499,29 @@ def build_parser() -> argparse.ArgumentParser:
     p_load.add_argument('--audit-file', default='',
                         help='JSONL-журнал аудита переноса (Фаза 25)')
 
+    p_mig = sub.add_parser('migrate',
+        help='Сквозной перенос одной командой (extract→transform→load, Фаза 56 C4)')
+    p_mig.add_argument('--source-dir', required=True,
+                       help='каталог источника (1Cv8.1CD или 1Cv7.MD/.dat)')
+    p_mig.add_argument('--source-encoding', default='',
+                       help='кодировка источника 7.7 (cp866/cp1251); пусто = из конфига')
+    p_mig.add_argument('--rules', default='',
+                       help='файл правил TOON rules.json (пусто — без трансформации)')
+    p_mig.add_argument('--out', default='migrate-out.json',
+                       help='промежуточный/результат JSON')
+    p_mig.add_argument('--direct', default='',
+                       help='каталог приёмника 1CD: прямая запись в копию')
+    p_mig.add_argument('--workdir', default='', help='рабочий каталог копии (--direct)')
+    p_mig.add_argument('--no-snapshot', action='store_true',
+                       help='не сохранять snapshot приёмника (--direct)')
+    p_mig.add_argument('--workers', type=int, default=2,
+                       help='потоков чтения 8.x')
+
+    p_wiz = sub.add_parser('wizard',
+        help='Интерактивный мастер переноса (аудит раунда 6, G2)')
+    p_wiz.add_argument('--no-run', action='store_true',
+                       help='только напечатать команду, не выполнять')
+
     p_status = sub.add_parser('status', help='Состояние пайплайна')
     p_status.add_argument('--project-dir', default='.')
 
@@ -1436,7 +1576,12 @@ def build_parser() -> argparse.ArgumentParser:
                              help='Сводка по ИБ 1CD: таблицы/строки/объём/locale (Фаза 53 U16)')
     p_stats.add_argument('--source-dir', required=True)
 
-    sub.add_parser('mcp', help='Список MCP-тулов сервера (Фаза 53 U15)')
+    p_mcp_g = sub.add_parser('mcp',
+        help='MCP-сервер/тулы (Фаза 53 U15; --stdio запускает сервер, C1)')
+    p_mcp_g.add_argument('--stdio', action='store_true',
+                         help='запустить stdio-сервер (для MCP-клиентов)')
+    p_mcp_g.add_argument('--sse', action='store_true',
+                         help='запустить SSE-сервер (опционально)')
 
     sub.add_parser('metrics', help='Метрики в формате Prometheus (Фаза 21)')
 
@@ -1620,6 +1765,8 @@ def main(argv: list[str] | None = None) -> int:
         'export-xlsx': cmd_export_xlsx,
         'stats': cmd_stats,
         'mcp': cmd_mcp,
+        'migrate': cmd_migrate,
+        'wizard': cmd_wizard,
         'shell': cmd_shell,
     }
     try:

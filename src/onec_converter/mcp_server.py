@@ -865,3 +865,21 @@ def _http_load(objects: list[dict[str, Any]], source_ib: str, target_ib: str,
         return sum(r.created for r in results)
 
     return asyncio.run(run())
+
+
+def server_main(transport: str = 'stdio') -> None:
+    """Запуск MCP-сервера (stdio по умолчанию). CLI: onec-converter mcp --stdio.
+
+    Аудит раунда 6 (C1/U15): раньше `python -m onec_converter.mcp_server`
+    только импортировал модуль и завершался — сервер не запускался.
+    Теперь точка входа run() держит stdio-транспорт для MCP-клиентов
+    (Claude/Cursor/pi), stdout занят JSON-RPC, события — в stderr.
+    """
+    try:
+        mcp.run(transport=transport)  # type: ignore[arg-type]
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == '__main__':
+    server_main()
