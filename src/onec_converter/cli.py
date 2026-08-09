@@ -83,6 +83,19 @@ def cmd_inspect(args: argparse.Namespace) -> int:
                 rows, nbytes = db.table_stats(name)
                 tables[name] = {'rows': rows, 'bytes': nbytes}
         meta = {'version': '8.x', 'tables': tables}
+    if _resolve_pretty(args):
+        from .terminal import render_table
+
+        if ver == '77':
+            print(f'Версия: 7.7; разделов: {len(meta["sections"])}; '
+                  f'справочников: {len(meta["references_tables"])}; '
+                  f'констант: {meta["constants"]}')
+            return 0
+        print(render_table(
+            ['Таблица', 'Строк', 'Байт'],
+            [[n, meta['tables'][n]['rows'], meta['tables'][n]['bytes']]
+             for n in sorted(meta['tables'])], max_col=60))
+        return 0
     print(json.dumps(meta, ensure_ascii=False, indent=2, default=str))
     return 0
 
@@ -240,6 +253,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
     save_json_stream(objs, args.out)
     print(json.dumps({'ok': True, 'objects': len(objs), 'file': args.out},
                      ensure_ascii=False))
+    _done_note(f'извлечено объектов: {len(objs)} -> {args.out}')
     return 0
 
 
@@ -332,6 +346,8 @@ def cmd_transform(args: argparse.Namespace) -> int:
     save_json_batch(out, args.out)
     print(json.dumps({'ok': True, 'objects': len(out), 'file': args.out,
                       'problems': problems}, ensure_ascii=False))
+    _done_note(f'преобразовано объектов: {len(out)} -> {args.out}'
+               + (f' ({len(problems)} проблем)' if problems else ''))
     return 0
 
 
@@ -634,6 +650,16 @@ def cmd_stats(args: argparse.Namespace) -> int:
             'bytes': total_bytes,
             'locale': getattr(db, 'locale', ''),
         }
+    if _resolve_pretty(args):
+        from .terminal import render_table
+
+        print(render_table(['Показатель', 'Значение'], [
+            ['Таблиц', rep['tables']],
+            ['Строк', rep['rows']],
+            ['Объём, байт', rep['bytes']],
+            ['Locale', rep['locale']],
+        ]))
+        return 0
     print(json.dumps(rep, ensure_ascii=False))
     return 0
 
@@ -771,6 +797,7 @@ def cmd_load(args: argparse.Namespace) -> int:
                    'mode': 'file', 'file': str(target)})
     print(json.dumps({'ok': True, 'objects': len(objs), 'file': str(target)},
                      ensure_ascii=False))
+    _done_note(f'загружено объектов: {len(objs)} -> {target}')
     return 0
 
 
@@ -814,6 +841,15 @@ def cmd_query(args: argparse.Namespace) -> int:
                                    limit=args.limit)
     except QueryError as exc:
         return _err(str(exc))
+    if _resolve_pretty(args):
+        from .terminal import render_table
+
+        if not rows:
+            print('(нет строк)')
+            return 0
+        headers = list(rows[0].keys())
+        print(render_table(headers, [list(r.values()) for r in rows]))
+        return 0
     print(json.dumps({'ok': True, 'table': args.table, 'count': len(rows),
                       'rows': rows}, ensure_ascii=False, default=str))
     return 0
@@ -830,6 +866,19 @@ def cmd_guid_diff(args: argparse.Namespace) -> int:
         return _err(str(exc))
     except (OSError, ValueError) as exc:
         return _err(str(exc))
+    if _resolve_pretty(args):
+        from .terminal import render_table
+
+        print(f'Объекты: только источник {len(report["objects"]["only_source"])}, '
+              f'только приёмник {len(report["objects"]["only_target"])}')
+        print(f'Таблицы: только источник {len(report["tables"]["only_source"])}, '
+              f'только приёмник {len(report["tables"]["only_target"])}')
+        osrc = list(report['objects']['only_source'])
+        if osrc:
+            print()
+            print(render_table(['Только в источнике (объекты)'],
+                               [[o] for o in osrc], max_col=60))
+        return 0
     print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
     return 0
 
@@ -1005,6 +1054,18 @@ def _jsonable(v: Any) -> Any:
     return str(v) if v is not None and not isinstance(v, (int, float, bool, str)) else v
 
 
+def _done_note(msg: str, t0: float | None = None) -> None:
+    """Человекочитаемая заметка о завершении шага в stderr (аудит раунда 6,
+    F3). Печатается ТОЛЬКО в TTY, чтобы не засорять pipe/JSON-выводы."""
+    from .terminal import is_tty
+
+    if not is_tty():
+        return
+    tail = f' ({(time.perf_counter() - t0):.1f}s)' if t0 is not None else ''
+    print(f'[done] {msg}{tail}', file=sys.stderr, flush=True)
+
+
+
 def _table_row_to_rec(row: bytes, table: Any) -> dict[str, Any]:
     """Декодировать строку 1CD в JSON-совместимый dict по полям таблицы.
 
@@ -1148,12 +1209,87 @@ def cmd_audit_verify(args: argparse.Namespace) -> int:
 
 # ---- entry point ----
 
+# Категории подкоманд для сгруппированного --help (аудит раунда 6, G1/G3/F4):
+# помогает не теряться в 31 команде и отличать основные от операционных.
+COMMAND_CATEGORIES: dict[str, str] = {
+    # Разведка: понять что в базе
+    'inspect': 'Разведка', 'stats': 'Разведка', 'query': 'Разведка',
+    'dump-records': 'Разведка', 'export-xlsx': 'Разведка', 'shell': 'Разведка',
+    'guid-diff': 'Разведка', 'config-versions': 'Разведка',
+    # Перенос: полный цикл
+    'extract': 'Перенос', 'map': 'Перенос', 'transform': 'Перенос',
+    'load': 'Перенос', 'migrate': 'Перенос',
+    # Проверка
+    'verify': 'Проверка', 'rules-diff': 'Проверка', 'audit-verify': 'Проверка',
+    'clone-db': 'Проверка',
+    # Отчёты и аудит
+    'audit': 'Отчёты и аудит', 'pii-report': 'Отчёты и аудит',
+    'sonar-report': 'Отчёты и аудит', 'dump-report': 'Отчёты и аудит',
+    'metrics': 'Отчёты и аудит',
+    # Операционные: редко, для тех. интеграций
+    'doctor': 'Служебные', 'cache': 'Служебные', 'techlog': 'Служебные',
+    'fetch-config': 'Служебные', 'export-kd3': 'Служебные',
+    'mint-token': 'Служебные', 'ai-map': 'Служебные',
+    'ai-explain': 'Служебные', 'mcp': 'Служебные',
+    'status': 'Служебные',
+}
+
+
+class _CategoryHelpFormatter(argparse.RawDescriptionHelpFormatter):
+    """help, где подкоманды сгруппированы по категориям."""
+
+    def _format_action(self, action: argparse.Action) -> str:
+        if isinstance(action, argparse._SubParsersAction):
+            # собрать help каждого выбора из _choices_actions (argparse кладёт
+            # help от add_parser(help=...) именно сюда, не в subparser)
+            help_by: dict[str, str] = {}
+            for ch in getattr(action, '_choices_actions', []):
+                help_by[ch.dest] = ch.help or ''
+            parts = ['', action.help or '', '']
+            by_cat: dict[str, list[tuple[str, str]]] = {}
+            for name in action.choices:
+                cat = COMMAND_CATEGORIES.get(name, 'Прочее')
+                by_cat.setdefault(cat, []).append((name, help_by.get(name, '')))
+            order = ['Разведка', 'Перенос', 'Проверка', 'Отчёты и аудит',
+                     'Служебные', 'Прочее']
+            for cat in order:
+                items = by_cat.pop(cat, [])
+                if not items:
+                    continue
+                items.sort(key=lambda x: x[0])
+                parts.append(f'  {cat}:')
+                for name, h in items:
+                    hl = self._format_text(h).strip() if h else ''
+                    parts.append(f'    {name:<16} {hl}')
+            return '\n'.join(parts) + '\n'
+        return super()._format_action(action)
+
+
+def _resolve_pretty(args: argparse.Namespace) -> bool:
+    """Определить режим человек-читаемого вывода (аудит раунда 6, F1).
+
+    --pretty/--no-pretty на root-парсере переопределяет авто-детект: включено,
+    когда вывод идёт в TTY; при pipe/файле или --json выводим машиночитаемый
+    JSON/CSV, чтобы не сломать скриптовую интеграцию."""
+    from .terminal import is_tty
+
+    flag = getattr(args, 'pretty', None)  # None = авто
+    if flag is not None:
+        return bool(flag)
+    return is_tty()
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog='onec-converter',
-        description='Перенос данных между ИБ 1С (CLI без MCP-клиента).')
+        description='Перенос данных между ИБ 1С (CLI без MCP-клиента).',
+        formatter_class=_CategoryHelpFormatter)  # ауд. раунда 6 G1: группы команд
     p.add_argument('--version', action='version',
                   version=__version__)
+    p.add_argument('--pretty', dest='pretty', action='store_true', default=None,
+                   help='человекочитаемый вывод (ASCII-таблица) — авто в TTY')
+    p.add_argument('--no-pretty', dest='pretty', action='store_false',
+                   help='машиночитаемый вывод (JSON/CSV) даже в TTY')
     sub = p.add_subparsers(dest='command', required=True)
 
     p_inspect = sub.add_parser('inspect', help='Метаданные источника')
@@ -1436,6 +1572,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Надёжность консоли (аудит раунда 6, H-fix): на Windows cp1251-консолях
+    # help и вывод с кириллицей/спецсимволами (↔ …) падали UnicodeEncodeError.
+    # Переключаем stdout/stderr на UTF-8 с errors='replace' — CLI не падает
+    # ни на какой кодовой странице, а непечатные байты не роняют процесс.
+    for _s in (sys.stdout, sys.stderr):
+        reconfigure = getattr(_s, 'reconfigure', None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding='utf-8', errors='replace')
+        except (AttributeError, ValueError):
+            pass  # не-файловый поток — трогать нечего
     args = build_parser().parse_args(argv)
     # аудит (Фаза 25): файл из --audit-file или ONEC_AUDIT_FILE (для MCP)
     audit_file = getattr(args, 'audit_file', '') or os.environ.get('ONEC_AUDIT_FILE', '')

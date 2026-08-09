@@ -15,8 +15,45 @@ from __future__ import annotations
 
 import sys
 import time
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
+
+
+def is_tty(stream: Any | None = None) -> bool:
+    """Вывод идёт в интерактивный терминал (а не в pipe/файл).
+
+    CLI печатает человек-читаемые ASCII-таблицы только в TTY; при перенаправ-
+    лении (| файл) оставляет JSON/CSV для машинного потребления (аудит
+    раунда 6, F1)."""
+    stream = stream if stream is not None else sys.stdout
+    file = getattr(stream, 'isatty', None)
+    return bool(file and file())
+
+
+def render_table(headers: Sequence[str],
+                 rows: Sequence[Sequence[object]], *, max_col: int = 40) -> str:
+    """Простая человек-читаемая ASCII-таблица для CLI (без внешних зависи-
+    мостей). Значения длиннее max_col обрезаются с многоточием. Возвращает
+    строку с рамками, готовую к print()."""
+    def _cell(v: object) -> str:
+        s = str(v) if v is not None else ''
+        s = ' '.join(s.split())  # схлопнуть пробелы/переводы строк
+        return s if len(s) <= max_col else s[:max_col - 1] + '…'
+
+    cells = [[_cell(h) for h in headers], *[[_cell(c) for c in r] for r in rows]]
+    widths = [max(len(row[i]) for row in cells) for i in range(len(headers))]
+    # де-факто: если таблица шире терминала — не падаем, рамка просто шире
+    def _fmt(row: Sequence[str], sep: str = ' │ ') -> str:
+        return sep.join(c.ljust(widths[i]) for i, c in enumerate(row))
+
+    border = '─' * (sum(widths) + 2 * (len(headers) - 1) + 2)
+    lines = ['┌' + border + '┐', '│ ' + _fmt(cells[0]) + ' │',
+             '├' + border + '┤']
+    for row in cells[1:]:
+        lines.append('│ ' + _fmt(row) + ' │')
+    lines.append('└' + border + '┘')
+    return '\n'.join(lines)
 
 
 def _stamp() -> str:
