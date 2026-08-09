@@ -1,0 +1,8 @@
+# Proposal — фаза-46-0-29
+
+**Goal:** Фаза 46 (0.29.0) — продукт и документация: (1) README «Tamper-evident audit log» для комплаенс (формула цепочки, audit-verify --cross-files, ссылка на recipe) + feature matrix (7.7/файловая 8.x/SQL 8.x); (2) examples/llm_agent_dialog.md — диалог LLM-агента с auto_map_schemas/explain_diff (confidence); (3) extension_83/README: Совпадает() constant-time + rate-limit ПроверитьКлюч с честным ограничением; (4) base_health.errors — реальная диагностика (пустой файл, блокировки другой сессией); (5) notify.telegram_url экранирование через urllib.parse.quote; (6) clone_db прогресс-логирование (WorkflowProgress.log/total; логи в stderr); (7) docs/recipes/полный-цикл-clone-load-verify-audit.md; (8) тесты +6 в tests/test_phase46_product.py. CHANGELOG 0.29.0, план ✅, релиз.
+
+- Platform: тесты в E:\test через gates.sh; версия 0.29.0; progress-логи в stderr (stdout машиночитаем)
+- Constraints: compact
+- Budget: compact
+- **Lessons applied (v0.12):** фазу-25-audit-логирование:forge:7c216dc57da7, фазу-23-conformance-тесты:forge:753265ca3073, фаза-37-0-20:forge:450954ba4c38, фазу-24-полный-сценарий:forge:1b6dbaa2498b, фаза-45-0-28:forge:5589aab4fd20

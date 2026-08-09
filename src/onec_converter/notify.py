@@ -52,9 +52,12 @@ def send_webhook(url: str, payload: dict[str, Any], timeout: int = 15,
 
 
 def telegram_url(token: str, chat_id: str) -> str:
-    """URL Telegram Bot API для sendMessage."""
-    return (f'https://api.telegram.org/bot{token}/sendMessage'
-            f'?chat_id={chat_id}')
+    """URL Telegram Bot API для sendMessage (chat_id/token экранируются,
+    Фаза 46)."""
+    from urllib.parse import quote
+
+    return (f'https://api.telegram.org/bot{quote(token, safe="")}/sendMessage'
+            f'?chat_id={quote(chat_id, safe="")}')
 
 
 def notify_telegram(token: str, chat_id: str, text: str,

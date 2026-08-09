@@ -3,6 +3,24 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.29.0 (2026-08)
+
+### Продукт и документация (Фаза 46)
+- README: раздел «Tamper-evident audit log» для комплаенс (формула цепочки,
+  verify_audit + --cross-files, ссылка на recipe) и feature matrix
+  (7.7 / файловая 8.x / SQL 8.x).
+- examples/llm_agent_dialog.md — диалог LLM-агента (Claude/Cursor) с
+  auto_map_schemas/explain_diff.
+- extension_83/README: документированы Совпадает() (constant-time) и
+  rate-limit ПроверитьКлюч (Фаза 45) с честным ограничением.
+- base_health.errors — реальная диагностика: пустой файл, блокировки
+  другой сессией (вместо зарезервированного []).
+- notify.telegram_url: экранирование token/chat_id (urllib.parse.quote).
+- clone_db: прогресс-логирование (WorkflowProgress.log, total; stdout
+  остаётся машиночитаемым — логи в stderr).
+- docs/recipes/полный-цикл-clone-load-verify-audit.md — сквозной рецепт.
+- Ворота: pytest (+6), conformance, ruff, mypy, check_bsl, vitest.
+
 ## 0.28.0 (2026-08)
 
 ### AI-навыки глубже и CLI (Фаза 45)

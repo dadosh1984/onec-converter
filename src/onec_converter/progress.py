@@ -18,6 +18,7 @@ class WorkflowProgress:
     objects: int = 0       # перенесено объектов
     errors: int = 0        # ошибок
     bytes_moved: int = 0   # данных (прибл.)
+    total: int = 0         # ожидаемый объём (единиц work)
     started: float = field(default_factory=time.time)
 
     def tick_rows(self, n: int = 1, size: int = 0) -> None:
@@ -26,6 +27,12 @@ class WorkflowProgress:
 
     def tick_object(self) -> None:
         self.objects += 1
+
+    def log(self, msg: str) -> None:
+        """Прогресс-сообщение (stderr — stdout остаётся машиночитаемым)."""
+        import sys
+
+        print(f'[progress {self.elapsed():.1f}s] {msg}', file=sys.stderr)
 
     def tick_error(self) -> None:
         self.errors += 1

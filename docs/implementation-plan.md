@@ -376,16 +376,15 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 - [x] [assumption] ворота зелёные; релиз 0.28.0
 ## Фаза 46 — Продукт и документация (0.29.0)
 
-- [ ] [fact] README: «tamper-evident audit log» для комплаенс-аудитории
-- [ ] [fact] README: feature matrix (7.7 / файловая 8.x / SQL 8.x)
-- [ ] [fact] README/PyPI: живой пример диалога Claude/Cursor (auto_map/explain_diff)
-- [ ] [fact] extension_83/README.md: Совпадает()/constant-time описание
-- [ ] [fact] base_health: errors заполняется диагностикой (не всегда [])
-- [ ] [fact] notify.telegram_url: urllib.parse.quote(chat_id)
-- [ ] [fact] clone_db: прогресс-логирование через progress.py для больших файлов
-- [ ] [fact] docs/recipes: полный цикл clone-db→load→verify→audit→verify_audit
-- [ ] [assumption] ворота зелёные; релиз 0.29.0
-
+- [x] [fact] README «tamper-evident audit log» для комплаенс
+- [x] [fact] feature matrix (7.7 / файловая 8.x / SQL 8.x)
+- [x] [fact] пример диалога Claude/Cursor (auto_map/explain_diff)
+- [x] [fact] extension_83/README: Совпадает()/constant-time + rate-limit
+- [x] [fact] base_health.errors — реальная диагностика (пустой файл, блокировки)
+- [x] [fact] notify.telegram_url + urllib.parse.quote
+- [x] [fact] clone_db прогресс-логирование (progress.py, stderr)
+- [x] [fact] docs/recipes полный цикл clone-db→load→verify→audit→verify_audit
+- [x] [assumption] ворота зелёные; релиз 0.29.0
 ## Фаза 47 — Архитектурные хвосты (0.30.0)
 
 - [ ] [fact] OnecConverterError — базовый класс исключений (audit/clone/sql/health наследуют)

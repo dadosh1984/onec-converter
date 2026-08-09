@@ -41,6 +41,10 @@ def clone_db(source_dir: str | Path, target_dir: str | Path,
     if dst.resolve() == cd.resolve():
         raise CloneError('source_dir == target_dir: клонирование в себя')
 
+    from .progress import WorkflowProgress
+
+    progress = WorkflowProgress(total=1)
+
     # кеш-сброс: вычисляем ключ ПРЕЖНЕГО файла приёмника (если он был)
     # и дропаем именно его — после копии новый dst получит новый ключ
     # (новый mtime), которого в кеше ещё нет; старый кеш недействителен.
@@ -49,12 +53,15 @@ def clone_db(source_dir: str | Path, target_dir: str | Path,
         cache.drop(file_key(dst))
 
     # полная копия файла (структура + данные), оригинал не изменяется
+    progress.log(f'копирование {cd.stat().st_size} байт -> {dst}')
     shutil.copy2(cd, dst)
+    progress.tick_rows(1, int(dst.stat().st_size))
 
     from .source_8x_file import Database1CD
 
     with Database1CD(dst) as db:
         tables = len(db.tables)
+    progress.log(f'готово: {tables} таблиц, {dst.stat().st_size} байт')
 
     rules_path: str | None = None
     if rules:
@@ -66,6 +73,7 @@ def clone_db(source_dir: str | Path, target_dir: str | Path,
         rules_dst = rules_dir / rp.name
         shutil.copy2(rp, rules_dst)
         rules_path = str(rules_dst)
+        progress.log(f'правила скопированы: {rules_dst}')
 
     return {
         'ok': True,

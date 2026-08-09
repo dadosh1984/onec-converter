@@ -32,11 +32,16 @@ def base_health(source_dir: str | Path, include_rows: bool = False,
     """
     src = Path(source_dir)
     cd = src / '1Cv8.1CD'
+    errors: list[str] = []
     if not cd.is_file():
         raise HealthError(f'нет 1Cv8.1CD в {source_dir}')
+    if cd.stat().st_size == 0:
+        errors.append('файл 1Cv8.1CD пуст (0 байт)')
 
     locks = sorted(
         p.name for pat in LOCK_PATTERNS for p in src.glob(pat))
+    if locks:
+        errors.append('ИБ открыта другой сессией: ' + ', '.join(locks))
     free_bytes = shutil.disk_usage(src).free
 
     with Database1CD(cd) as db:
@@ -65,7 +70,8 @@ def base_health(source_dir: str | Path, include_rows: bool = False,
         'rows': rows,
         'rows_computed': include_rows,
         'locks': locks,
-        'errors': [],          # зарезервировано под диагностику
+        'errors': errors,      # реальная диагностика (Фаза 46): пустой файл,
+                               # блокировки другой сессией
         'file_bytes': cd.stat().st_size,
         'free_bytes': free_bytes,
     }
