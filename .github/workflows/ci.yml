@@ -56,6 +56,43 @@ jobs:
         run: docker run --rm onec-converter:ci --version
         if: matrix.python == '3.11'
 
+  windows:
+    # Windows CI-джоба (U48): gates.sh работает в Git Bash; real-base e2e
+    # (2.5 ГБ) отсутствуют на runner — они сами скипаются (skipif).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dev deps
+        run: pip install -e ".[dev]"
+
+      - name: ruff
+        run: bash scripts/gates.sh ruff
+
+      - name: mypy (strict)
+        run: bash scripts/gates.sh mypy
+
+      - name: pytest (unit, ONEC_TEST_TMP на рабочем диске)
+        env:
+          ONEC_TEST_TMP: ./.pytest-tmp
+        run: bash scripts/gates.sh pytest
+
+      - name: pytest (coverage)
+        env:
+          ONEC_TEST_TMP: ./.pytest-tmp
+        run: bash scripts/gates.sh pytest --coverage
+
+      - name: MCP conformance
+        env:
+          ONEC_TEST_TMP: ./.pytest-tmp
+        run: bash scripts/gates.sh conformance
+
   sql-pg:
     runs-on: ubuntu-latest
     services:

@@ -11,7 +11,7 @@
 #
 # Временные файлы (копии реальных .1CD, сотни МБ) кладутся в базовый tmp.
 # По умолчанию /tmp; для больших баз задайте ONEC_TEST_TMP на диск с местом:
-#   ONEC_TEST_TMP=E:/test/.pytest-tmp bash scripts/gates.sh
+#   ONEC_TEST_TMP=E:/tmp/.pytest-tmp bash scripts/gates.sh
 #
 # vitest выполняется только если настроен (есть package.json и *.test.ts);
 # иначе — skip с предупреждением (в непростом клоне нет node-инструментов).
@@ -58,6 +58,7 @@ COVERAGE_MODULES=()
 COV_THRESHOLD=70
 if [[ -f pyproject.toml ]]; then
   while IFS= read -r m; do
+    m="${m%$'\r'}"  # Git Bash на Windows отдаёт CRLF — убрать CR (Фаза 50)
     [[ -n "$m" ]] && COVERAGE_MODULES+=("$m")
   done < <(python - <<'PY'
 import tomllib
@@ -82,6 +83,13 @@ if [[ "$COVERAGE" == "1" ]]; then
     COV_ARGS+=(--cov=onec_converter.$m)
   done
   COV_ARGS+=(--cov-report=term --cov-fail-under=$COV_THRESHOLD)
+  # coverage-замер ядра от юнит-тестов; real-base e2e (марker integration,
+  # 2.5ГБ копии) не инструментируются — они не про покрытие модулей (Фаза 50)
+  COV_ARGS+=(--ignore=tests/test_8x_index_warning_preserved.py \
+             --ignore=tests/test_load_8x_e2e.py \
+             --ignore=tests/test_load_8x_doc_e2e.py \
+             --ignore=tests/test_load_8x_verify_e2e.py \
+             --ignore=tests/test_write_8x_copy.py)
 fi
 
 # Лимит времени прогона pytest (сек) — предупреждение при замедлении ворот.
@@ -90,6 +98,9 @@ PYTEST_TIME_LIMIT="${PYTEST_TIME_LIMIT:-180}"
 run_pytest() {
   echo "== pytest ${COV_ARGS[*]:+(${COV_ARGS[*]})} =="
   local t0=$SECONDS
+  # coverage импортирует модули в начале сессии — src должен быть в PYTHONPATH
+  # (pytest.ini pythonpath для pytest-cov недостаточно, Фаза 50)
+  export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
   PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} --basetemp=${ONEC_TEST_TMP}" python -m pytest -q "${COV_ARGS[@]}" || return 1
   local elapsed=$((SECONDS - t0))
   echo "== pytest: ${elapsed}s =="
@@ -136,15 +147,43 @@ run_vitest() {
   fi
 }
 
+# Бенчмарк-пороги (Фаза 50, U49): запускает scripts/benchmark.py на
+# fake-базе и падает, если время заметно деградировало. Пороги — через env
+# (дефолты щадящие: ловят грубую деградацию, не флапают на медленных CI).
+run_benchmark() {
+  echo "== benchmark =="
+  local work="${ONEC_TEST_TMP:-/tmp/onec_bench}"
+  mkdir -p "$work"
+  local out
+  out=$(PYTHONPATH=src python scripts/benchmark.py "$work" 2>/dev/null) || {
+    echo "  benchmark: не удался — пропуск"; return 0; }
+  local meta read_meta_max read_all read_all_max
+  meta=$(printf '%s' "$out" | sed -n 's/.*metadata_ms=\([0-9.]*\).*/\1/p')
+  read_all=$(printf '%s' "$out" | sed -n 's/.*read_all_ms=\([0-9.]*\).*/\1/p')
+  read_meta_max="${BENCH_META_MS_MAX:-1000}"
+  read_all_max="${BENCH_READ_MS_MAX:-5000}"
+  echo "  $out"
+  if awk -v v="$meta" -v lim="$read_meta_max" 'BEGIN{exit !(v>lim)}'; then
+    echo "  !! metadata_ms=${meta} > ${read_meta_max} — производительность метаданных деградировала" >&2
+    return 1
+  fi
+  if awk -v v="$read_all" -v lim="$read_all_max" 'BEGIN{exit !(v>lim)}'; then
+    echo "  !! read_all_ms=${read_all} > ${read_all_max} — чтение данных деградировало" >&2
+    return 1
+  fi
+  echo "  benchmark ok"
+}
+
 TARGET="${ARGS[0]:-all}"
 case "$TARGET" in
   pytest) run_pytest ;;
   ruff)   run_ruff ;;
   mypy)   run_mypy ;;
   vitest) run_vitest ;;
+  benchmark) run_benchmark ;;
   conformance) run_conformance ;;
   bsl)    run_bsl ;;
   docker) run_docker ;;
   all)    run_pytest && run_conformance && run_ruff && run_mypy && run_bsl && run_vitest && run_docker ;;
-  *) echo "неизвестная цель: $TARGET (pytest|ruff|mypy|vitest|conformance|bsl|docker|all|--strict-steps|--coverage)" >&2; exit 2 ;;
+  *) echo "неизвестная цель: $TARGET (pytest|ruff|mypy|vitest|benchmark|conformance|bsl|docker|all|--strict-steps|--coverage)" >&2; exit 2 ;;
 esac

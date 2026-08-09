@@ -3,6 +3,36 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.33.0 (2026-08)
+
+### Покрытие и тесты (Фаза 50, раунд 5)
+- U43: coverage_modules расширен на 9 модулей (kd3_export, sonar_report,
+  gdpr_152_report, source_techlog, notify, terminal, strict,
+  type_priority + уже был s3_client). Порог — 70%. Итог покрытия 90%.
+- U44: dedicated-тесты на 9 модулей (tests/test_phase50_coverage.py, +18):
+  kd3_export (XML+ошибки), sonar_report (RUF->RU, severity, fake-ruff),
+  gdpr_152 (rules, hashes, ошибки), notify (webhook через local HTTP,
+  экранирование telegram_url), terminal (stderr-эмиссия, tool_summary),
+  strict (все ветки validate_value + validate_object), type_priority.
+- U44 fix: strict теперь валидирует ref-поля для ЛЮБОГО значения (не только
+  bytes/str) — битые ссылки не проскальзывают молча.
+- U47: property round-trip fake-1CD (seeded random базы -> Database1CD).
+- U50: hypothesis fuzz (Cache round-trip, strict приём чисел); dev-dep
+  hypothesis>=6.
+- U49: `gates.sh benchmark` — пороги BENCH_META_MS_MAX/BENCH_READ_MS_MAX
+  (дефолты 1000/5000 мс) ловят деградацию чтения.
+- U48: Windows CI-джоба (windows-latest, unit+coverage+conformance).
+- Fix gates.sh: CRLF в именах модулей () ломал coverage-замер — 0%;
+  PYTHONPATH=src для benchmark и pytest-coverage (pytest.ini pythonpath
+  для pytest-cov недостаточен).
+- Fix: real-base e2e (2.5 ГБ копии) размечены `integration` и исключены
+  из coverage-замера — покрытие ядра 90% от юнит-тестов, ворота быстрее
+  (30с вместо 232с).
+- Тесты всегда в E:	mp: обновлены gates.sh/Makefile/pytest.ini/AGENTS.md;
+  корневой /tmp/pytest-of-* очищен (C:, 31 ГБ).
+- Ворота: pytest 482 (1 локальный skip), conformance 5, ruff чисто,
+  mypy (53), check_bsl ок, vitest 326, coverage 90%.
+
 ## 0.32.0 (2026-08)
 
 ### Память и потоковость (Фаза 49, раунд 5)

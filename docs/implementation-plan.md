@@ -562,14 +562,15 @@ _oAuth2 — реализовано) — в бэклог ниже. План ра�
 
 ## Фаза 50 — Покрытие и тесты (0.33.0)
 
-- [ ] [fact] COVERAGE_MODULES + 9 модулей (U43); порог контроля покрытия
-- [ ] [fact] dedicated-тесты: notify/s3/kd3/sonar/gdpr/techlog/terminal/
-      strict/type_priority (U44)
-- [ ] [fact] property-тест round-trip 1CD запись→чтение (U47)
-- [ ] [fact] fuzz: hypothesis для cache и sql_source (U50)
-- [ ] [fact] бенчмарк-пороги в gates (U49): лимит времени критичных тестов
-- [ ] [fact] Windows CI-джоба pytest+vitest (U48)
-- [ ] [assumption] ворота зелёные; релиз 0.33.0
+- [x] [fact] COVERAGE_MODULES +9 модулей (U43); итог покрытия 90%
+- [x] [fact] dedicated-тесты notify/s3/kd3/sonar/gdpr/techlog/terminal/strict/type_priority (U44)
+- [x] [fact] strict fix: ref-поля валидируются для любых значений (U44)
+- [x] [fact] property round-trip 1CD (U47)
+- [x] [fact] hypothesis fuzz cache/strict (U50); dep hypothesis>=6
+- [x] [fact] бенчмарк-пороги в `gates.sh benchmark` (U49)
+- [x] [fact] Windows CI-джоба (U48)
+- [x] [fact] fix gates.sh: CRLF в coverage-модулях, PYTHONPATH=src
+- [x] [assumption] ворота зелёные; релиз 0.33.0
 
 ## Фаза 51 — MCP и LLM-агент (0.34.0)
 

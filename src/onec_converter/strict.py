@@ -93,7 +93,7 @@ def validate_value(ftype: str, length: int, precision: int, value: Any) -> list[
         return _check_number(length, precision, value)
     if ftype == 'DT':
         return _check_date(value)
-    if ftype in ('B', 'RV') and isinstance(value, (bytes, str)):
+    if ftype in ('B', 'RV'):
         return _check_ref(value)
     return []
 

@@ -35,7 +35,7 @@ Repository = "https://github.com/dadosh1984/onec-converter"
 [project.optional-dependencies]
 dev = [
     "pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.5", "mypy>=1.10",
-    "types-olefile", "types-openpyxl",
+    "types-olefile", "types-openpyxl", "hypothesis>=6",
 ]
 
 [project.scripts]
@@ -64,5 +64,7 @@ strict = true
 coverage_modules = [
     "objects_filter", "jwt_auth", "cache", "http_client", "mcp_server",
     "audit", "clone_db", "health", "s3_client", "sql_source", "ai_skills",
+    "kd3_export", "sonar_report", "gdpr_152_report", "source_techlog",
+    "notify", "terminal", "strict", "type_priority",
 ]
 coverage_threshold = 70

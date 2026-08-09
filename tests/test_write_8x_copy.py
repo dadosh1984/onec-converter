@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration  # реальные 2.5ГБ базы — вне coverage-замера (Фаза 50)
+
 from onec_converter.source_8x_file import Database1CD
 from onec_converter.write_8x import append_records, copy_1cd
 
