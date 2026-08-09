@@ -88,9 +88,9 @@ onec-converter <команда> --help
 | Чтение ИБ | `inspect`, `extract`, `stats`, `dump-records`, `query` |
 | Структуры/сверка | `guid-diff`, `config-versions`, `verify`, `rules-diff` |
 | Маппинг | `map --init/--llm-prompt`, `ai-map`, `ai-explain`, `transform` |
-| Загрузка | `load` (файл/HTTP/direct), `clone-db`, `dump-report` (S3) |
+| Загрузка | `migrate` (сквозной перенос одной командой), `wizard` (мастер), `load` (файл/HTTP/direct), `clone-db`, `dump-report` (S3) |
 | Отчёты | `export-xlsx`, `sonar-report`, `export-kd3`, `pii-report`, `audit` |
-| Инфраструктура | `doctor --fix`, `cache`, `metrics`, `benchmark`, `mcp`, `shell` |
+| Инфраструктура | `doctor --fix`, `cache`, `metrics`, `benchmark`, `mcp --stdio` (MCP-сервер), `shell` |
 | Сервис | `mint-token`, `fetch-config`, `techlog` |
 
 ### inspect — метаданные источника
