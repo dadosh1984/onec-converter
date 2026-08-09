@@ -184,6 +184,7 @@ case "$TARGET" in
   conformance) run_conformance ;;
   bsl)    run_bsl ;;
   docker) run_docker ;;
-  all)    run_pytest && run_conformance && run_ruff && run_mypy && run_bsl && run_vitest && run_docker ;;
+  all)    run_pytest && run_conformance && run_ruff && run_mypy && run_bsl && run_vitest \
+          && run_benchmark && run_docker ;;
   *) echo "неизвестная цель: $TARGET (pytest|ruff|mypy|vitest|benchmark|conformance|bsl|docker|all|--strict-steps|--coverage)" >&2; exit 2 ;;
 esac
