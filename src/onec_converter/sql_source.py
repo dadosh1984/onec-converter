@@ -16,10 +16,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol
 
+from .errors import OnecConverterError
 from .intermediate import OBJ_ATTRS, OBJ_ID, OBJ_KEY, OBJ_REFS, OBJ_TYPE
 
 
-class SqlSourceError(Exception):
+class SqlSourceError(OnecConverterError):
     """Ошибка чтения SQL-источника."""
 
 

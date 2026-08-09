@@ -385,15 +385,22 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 - [x] [fact] clone_db прогресс-логирование (progress.py, stderr)
 - [x] [fact] docs/recipes полный цикл clone-db→load→verify→audit→verify_audit
 - [x] [assumption] ворота зелёные; релиз 0.29.0
-## Фаза 47 — Архитектурные хвосты (0.30.0)
+## Фаза 47 — Архитектурные хвосты (0.30.0, финальная из раунда 4)
 
-- [ ] [fact] OnecConverterError — базовый класс исключений (audit/clone/sql/health наследуют)
-- [ ] [fact] http_client._ensure_token: лимит попыток OAuth2-обновления (защита от зацикливания)
-- [ ] [fact] cache.py: потокобезопасность (threading.Lock) + concurrent-тест
-- [ ] [fact] read_metadata: понятная ошибка на битых файлах (контекст + путь)
-- [ ] [fact] _blob_cache: лимит/эвикция при открытии базы
-- [ ] [fact] CHANGELOG: секция Security для фиксов фаз 41-43
-- [ ] [assumption] ворота зелёные; релиз 0.30.0
+- [x] [fact] OnecConverterError базовый класс (clone/sql/health наследуют;
+      audit осознанно без доменной ошибки — валидация уровня ValueError)
+- [x] [fact] лимит попыток OAuth2 в _ensure_token (max_token_attempts, 5)
+- [x] [fact] потокобезопасность cache.py (RLock) + concurrent-тест (8 потоков)
+- [x] [fact] понятная ошибка read_metadata на битых файлах (путь+причина)
+- [x] [fact] эвикция/лимит _blob_cache (64 МБ, полный сброс при переполнении)
+- [x] [fact] секция Security в CHANGELOG
+- [x] [assumption] ворота зелёные; релиз 0.30.0
+
+## Итог раунда 4 внешнего анализа (Фазы 41-47, релизы 0.24.0-0.30.0)
+
+Все 5 первоначальных находок и подтверждённые пункты второго анализа
+закрыты; оставшееся (delta-миграция, thread-безопасность — реализована,
+_oAuth2 — реализовано) — в бэклог ниже. План раунда 4 выполнен полностью.
 
 ## Бэклог (опционально, по востребованности)
 

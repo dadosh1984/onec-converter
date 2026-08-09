@@ -55,9 +55,11 @@ class HttpClient83:
     # когда задан secret, но token_url не задан.
     secret: str | None = None
     issuer: str = 'onec-converter'
+    max_token_attempts: int = 5  # лимит запросов токена за сессию (Фаза 47)
     _client: httpx.AsyncClient | None = field(default=None, init=False, repr=False)
     _token: str | None = field(default=None, init=False, repr=False)
     _token_exp: float = field(default=0.0, init=False, repr=False)
+    _token_attempts: int = field(default=0, init=False, repr=False)
 
     async def _ensure_token(self) -> None:
         """Обеспечить действующий Bearer-токен.
@@ -78,6 +80,14 @@ class HttpClient83:
             self._token_exp = time.time() + ttl * 0.9
             return
         assert self.token_url is not None  # ветка OAuth2 (token_url задан)
+        # защита от зацикливания при постоянном 401/сбое сервера (Фаза 47):
+        # лимит попыток запроса токена за сессию клиента
+        if self._token_attempts >= self.max_token_attempts:
+            raise HttpServiceError(
+                f'token: превышен лимит попыток '
+                f'({self.max_token_attempts}) за сессию — сервер токенов '
+                f'недоступен или отвечает ошибками')
+        self._token_attempts += 1
         payload = {'grant_type': 'client_credentials',
                    'client_id': self.client_id or '',
                    'client_secret': self.client_secret or ''}

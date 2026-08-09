@@ -10,12 +10,13 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from .errors import OnecConverterError
 from .source_8x_file import Database1CD
 
 LOCK_PATTERNS = ('1Cv8.1CL', '1Cv8tmp*', '1Cv8.1Ctmp')
 
 
-class HealthError(Exception):
+class HealthError(OnecConverterError):
     """Ошибка оценки здоровья базы."""
 
 

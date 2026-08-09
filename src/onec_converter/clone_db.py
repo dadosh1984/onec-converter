@@ -14,9 +14,10 @@ import shutil
 from pathlib import Path
 
 from .cache import Cache, file_key
+from .errors import OnecConverterError
 
 
-class CloneError(Exception):
+class CloneError(OnecConverterError):
     """Ошибка клонирования базы."""
 
 

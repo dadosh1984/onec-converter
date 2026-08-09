@@ -362,6 +362,8 @@ class Database1CD:
         self._dbnames: dict[str, tuple[str, int]] | None = None
         self._locale = ''
         self._blob_cache: dict[int, bytes] = {}  # blob_page -> данные blob-таблицы
+        self._blob_cache_bytes = 0
+        self._blob_cache_max = 64 * 1024 * 1024  # лимит кеша blob (Фаза 47)
         self._root_data: bytes | None = None  # данные root-объекта (каталог)
         self._ref_table_cache: dict[str, dict[bytes, str]] = {}  # таблица -> idrref: имя
         self._ref_name_cache: dict[tuple[str, bytes], str | None] = {}
@@ -556,13 +558,20 @@ class Database1CD:
             yield data[i:i + rl]
 
     def read_blob(self, table: TableDef, first_chunk: int, size: int) -> bytes:
-        """Чтение blob-цепочки таблицы (данные blob-таблицы кешируются)."""
+        """Чтение blob-цепочки таблицы (данные blob-таблицы кешируются с
+        лимитом объёма — при переполнении кеш очищается, Фаза 47)."""
         if size <= 0:
             return b''
         data = self._blob_cache.get(table.blob_page)
         if data is None:
             data = self.read_object(table.blob_page)
+            if (self._blob_cache_bytes + len(data)) > self._blob_cache_max:
+                # защита от переполнения памяти: сбрасываем кеш целиком
+                # (blob-таблицы крупные, LRU не окупается)
+                self._blob_cache = {}
+                self._blob_cache_bytes = 0
             self._blob_cache[table.blob_page] = data
+            self._blob_cache_bytes += len(data)
         out: list[bytes] = []
         pos = first_chunk
         remaining = size
@@ -954,7 +963,14 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
     tables: list[str] = []
     locale = ''
     timings = Timings()
-    with Database1CD(p) as db:
+    try:
+        db = Database1CD(p)
+    except (FormatError, OSError) as exc:
+        # понятная диагностика на битых/не-ИБ файлах (Фаза 47)
+        raise FormatError(
+            f'read_metadata({p}): файл повреждён или не является ИБ 8.x: '
+            f'{exc}') from exc
+    with db as db_ctx:
         tables = sorted(db.tables)
         locale = db.locale
         t0 = time.perf_counter()
