@@ -92,3 +92,6 @@
 блок-листа (`docs/ideas.md`) и, при желании, вариант B zero-setup
 (автоустановка расширения через `1cv8.exe DESIGNER`). Ворота —
 `bash scripts/gates.sh`; тесты больших баз — `E:\test`/`ONEC_TEST_TMP`.
+
+## U56 (из раунда 5)
+- [ ] CLI list-tables/dump-schema для SQL-источников (build_sql_source)

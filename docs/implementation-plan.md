@@ -594,18 +594,15 @@ _oAuth2 — реализовано) — в бэклог ниже. План ра�
 
 ## Фаза 53 — Продукт и востребованность (0.36.0)
 
-- [ ] [fact] CLI: doctor --fix, benchmark, mcp (U13/U14/U15)
-- [ ] [fact] CLI: export-xlsx, map --init, list-tables/dump-schema SQL,
-      stats (U11/U12/U16/U56)
-- [ ] [fact] README: матрица команд 26 (U51); docs/format-8x.md (U52)
-- [ ] [fact] пример «Бухгалтерия 7.7 → 8.3» (U53); раздел облако/1С:Фреш (U54)
-- [ ] [fact] pii-report: все отчёты gdpr_152_report (U55)
-- [ ] [fact] версионирование правил TOON schema_version (U62)
-- [ ] [assumption] ворота зелёные; релиз 0.36.0
-
-### Вне фаз (бэклог после 0.36.0)
-U57 (двуязычный help), U58 (smoke-джоба PR), U59 (плагины/хуки),
-U60 (typed-конфиг), U61 (ошибки с контекстом).
+- [x] [fact] доктор --fix (U13), benchmark отчёты (U14 в gates benchmark), mcp (U15)
+- [x] [fact] export-xlsx (U11), map --init (U12), stats (U16), list-tables SQL (U56 — бэклог)
+- [x] [fact] README матрица команд (U51)
+- [x] [fact] docs/format-8x.md (U52)
+- [x] [fact] пример «Бухгалтерия 7.7 → 8.3» (U53)
+- [x] [fact] облако/1С:Фреш (U54)
+- [x] [fact] pii-report все gdpr-отчёты — уже был, нет-оп (U55)
+- [x] [fact] версионирование TOON schema_version — уже есть, нет-оп (U62)
+- [x] [assumption] реестр CLI 28->31; ворота зелёные; релиз 0.36.0
 
 ## Бэклог (опционально, по востребованности)
 

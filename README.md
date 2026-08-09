@@ -81,6 +81,18 @@ onec-converter --help
 onec-converter <команда> --help
 ```
 
+### Матрица команд (Фаза 53, U51; полный перечень — docs/commands-map.md)
+
+| Группа | Команды |
+|---|---|
+| Чтение ИБ | `inspect`, `extract`, `stats`, `dump-records`, `query` |
+| Структуры/сверка | `guid-diff`, `config-versions`, `verify`, `rules-diff` |
+| Маппинг | `map --init/--llm-prompt`, `ai-map`, `ai-explain`, `transform` |
+| Загрузка | `load` (файл/HTTP/direct), `clone-db`, `dump-report` (S3) |
+| Отчёты | `export-xlsx`, `sonar-report`, `export-kd3`, `pii-report`, `audit` |
+| Инфраструктура | `doctor --fix`, `cache`, `metrics`, `benchmark`, `mcp`, `shell` |
+| Сервис | `mint-token`, `fetch-config`, `techlog` |
+
 ### inspect — метаданные источника
 ```
 onec-converter inspect --source-dir "1C_8.1" --source-encoding cp866

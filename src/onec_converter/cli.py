@@ -245,7 +245,32 @@ def cmd_extract(args: argparse.Namespace) -> int:
 # ---- map ----
 
 def cmd_map(args: argparse.Namespace) -> int:
-    """Правила маппинга: валидация (--rules-file) или промпт LLM (--llm-prompt, без вызова)."""
+    """Правила маппинга: валидация (--rules-file), промпт LLM (--llm-prompt)
+    или --init (шаблон правил из метаданных источника, U12)."""
+    if getattr(args, 'init', False):
+        if not args.meta_source or not args.out:
+            return _err('--init требует --meta-source и --out')
+        init_meta: dict[str, Any] = json.loads(
+            Path(args.meta_source).read_text(encoding='utf-8'))
+        objects_out: list[dict[str, Any]] = []
+        for o in init_meta.get('objects') or []:
+            kind = o.get('kind') or ''
+            name = o.get('name') or ''
+            if not kind or not name:
+                continue
+            src = f'{kind}.{name}'
+            attrs: dict[str, str] = {
+                (a.get('name') or ''): (a.get('name') or '')
+                for a in (o.get('attributes') or [])
+            }
+            objects_out.append({'source': src, 'target': '',
+                                'attributes': attrs})
+        schema = {'version': 1, 'objects': objects_out, 'enums': {}}
+        Path(args.out).write_text(
+            json.dumps(schema, ensure_ascii=False, indent=2), encoding='utf-8')
+        print(json.dumps({'ok': True, 'out': args.out,
+                          'objects': len(objects_out)}, ensure_ascii=False))
+        return 0
     if args.llm_prompt:
         if not args.meta_source or not args.meta_target or not args.out:
             return _err('--llm-prompt требует --meta-source, --meta-target, --out')
@@ -589,6 +614,86 @@ def cmd_dump_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_stats(args: argparse.Namespace) -> int:
+    """Сводка по ИБ 1CD: число таблиц, строк, объём, locale (Фаза 53, U16)."""
+    from .source_8x_file import Database1CD
+
+    cd = Path(args.source_dir) / '1Cv8.1CD'
+    if not cd.is_file():
+        return _err(f'нет 1Cv8.1CD в {args.source_dir}')
+    with Database1CD(cd) as db:
+        stats = db.table_stats_all()
+        total_rows = sum(v[0] for v in stats.values())
+        total_bytes = sum(v[1] for v in stats.values())
+        rep = {
+            'ok': True,
+            'tables': len(db.tables),
+            'rows': total_rows,
+            'bytes': total_bytes,
+            'locale': getattr(db, 'locale', ''),
+        }
+    print(json.dumps(rep, ensure_ascii=False))
+    return 0
+
+
+def cmd_mcp(_args: argparse.Namespace) -> int:
+    """Список MCP-тулов сервера (Фаза 53, U15)."""
+    from .mcp_server import mcp
+
+    tools = mcp._tool_manager.list_tools()
+    out = [{'name': t.name, 'description': (getattr(t, 'description', '') or '')}
+           for t in sorted(tools, key=lambda t: t.name)]
+    print(json.dumps({'ok': True, 'count': len(out), 'tools': out},
+                     ensure_ascii=False))
+    return 0
+
+
+def cmd_export_xlsx(args: argparse.Namespace) -> int:
+    """Экспорт первых N строк таблицы 1CD в XLSX (Фаза 53, U11)."""
+    from .source_8x_file import Database1CD, decode_field
+
+    cd = Path(args.source_dir) / '1Cv8.1CD'
+    if not cd.is_file():
+        return _err(f'нет 1Cv8.1CD в {args.source_dir}')
+    if not args.out:
+        return _err('укажите --out для XLSX')
+    rows: list[dict[str, object]] = []
+    with Database1CD(cd) as db:
+        t = db.tables.get(args.table)
+        if t is None:
+            return _err(f'нет таблицы {args.table!r}')
+        for i, row in enumerate(db.table_rows(t)):
+            if args.limit and i >= args.limit:
+                break
+            rec: dict[str, object] = {}
+            for fname, fdef in t.fields.items():
+                try:
+                    rec[fname] = _jsonable(decode_field(
+                        fdef, row[fdef.offset:fdef.offset + fdef.size]))
+                except (IndexError, ValueError, UnicodeDecodeError):
+                    rec[fname] = None
+            rows.append(rec)
+    from openpyxl import Workbook
+    from openpyxl.styles import Font as XFont
+
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.title = (t.name or 'Table')[:31]
+    fields = list(t.fields)
+    ws.append(fields)  # заголовки
+    for c in ws[1]:
+        c.font = XFont(bold=True)
+    for rec in rows:
+        ws.append([rec.get(f) for f in fields])
+    outp = Path(args.out)
+    outp.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(outp)
+    print(json.dumps({'ok': True, 'path': str(outp), 'rows': len(rows)},
+                     ensure_ascii=False))
+    return 0
+
+
 def _notify(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     """Отправка уведомления по завершении load (best-effort, Фаза 27)."""
     from .notify import NotifyError, notify_telegram, send_webhook
@@ -793,6 +898,27 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
             row(label, True)
         except (ImportError, ModuleNotFoundError):
             row(label, False, 'не установлен')
+    if getattr(_args, 'fix', False):
+        # U13: --fix — создаёт кеш и печатает команды установки недостающего.
+        cache_dir.mkdir(exist_ok=True)
+        missing = []
+        try:
+            __import__('olefile')
+        except (ImportError, ModuleNotFoundError):
+            missing.append('olefile')
+        try:
+            __import__('openpyxl')
+        except (ImportError, ModuleNotFoundError):
+            missing.append('openpyxl')
+        try:
+            __import__('httpx')
+        except (ImportError, ModuleNotFoundError):
+            missing.append('httpx')
+        if missing:
+            print('  fix: поставьте недостающие: '
+                  f'python -m pip install {" ".join(missing)}')
+        else:
+            print('  fix: все опциональные зависимости на месте; кеш готов')
     print('doctor: ' + ('все проверки пройдены' if problems == 0
                         else f'{problems} проблема(ы) выявлено'))
     return 0 if problems == 0 else 1
@@ -1043,6 +1169,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_map = sub.add_parser('map', help='Правила маппинга (TOON)')
     p_map.add_argument('--rules-file', default='')
+    p_map.add_argument('--init', action='store_true',
+                       help='Шаблон правил из метаданных источника ('
+                       'каждый объект -> та же таблица приёмника, Фаза 53 U12)')
     p_map.add_argument('--llm-prompt', action='store_true')
     p_map.add_argument('--meta-source', default='')
     p_map.add_argument('--meta-target', default='')
@@ -1118,7 +1247,11 @@ def build_parser() -> argparse.ArgumentParser:
                                        help='Версии конфигурации из файла базы (Фаза 11)')
     p_config_versions.add_argument('--source-dir', required=True)
 
-    sub.add_parser('doctor', help='Диагностика окружения (Фаза 17): зависимости/кеш')
+    p_doc = sub.add_parser('doctor',
+                           help='Диагностика окружения (Фаза 17/53): зависимости/кеш; --fix')
+    p_doc.add_argument('--fix', action='store_true',
+                       help='Починить поправимое (создать кеш) и показать команды '
+                       'установки недостающих зависимостей (U13)')
 
     p_cache = sub.add_parser('cache', help='Кеш: stats / trim / clear (Фаза 18/48)')
     p_cache.add_argument('sub', nargs='?', default='stats',
@@ -1137,6 +1270,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_dump.add_argument('--format', choices=['json', 'csv'], default='json')
     p_dump.add_argument('--max-bytes', type=int, default=0,
                         help='Потоковый вывод: остановить после N байт (Фаза 49)')
+
+    p_xlsx = sub.add_parser('export-xlsx',
+                            help='Первые N строк таблицы 1CD в XLSX (Фаза 53 U11)')
+    p_xlsx.add_argument('--source-dir', required=True)
+    p_xlsx.add_argument('--table', required=True)
+    p_xlsx.add_argument('--limit', type=int, default=1000)
+    p_xlsx.add_argument('--out', default='', help='путь к .xlsx')
+
+    p_stats = sub.add_parser('stats',
+                             help='Сводка по ИБ 1CD: таблицы/строки/объём/locale (Фаза 53 U16)')
+    p_stats.add_argument('--source-dir', required=True)
+
+    sub.add_parser('mcp', help='Список MCP-тулов сервера (Фаза 53 U15)')
 
     sub.add_parser('metrics', help='Метрики в формате Prometheus (Фаза 21)')
 
@@ -1305,6 +1451,9 @@ def main(argv: list[str] | None = None) -> int:
         'verify': cmd_verify,
         'rules-diff': cmd_rules_diff,
         'pii-report': cmd_pii_report,
+        'export-xlsx': cmd_export_xlsx,
+        'stats': cmd_stats,
+        'mcp': cmd_mcp,
         'shell': cmd_shell,
     }
     try:
