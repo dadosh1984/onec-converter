@@ -284,3 +284,58 @@ def test_import_tabular_section(tmp_path: Path,
                 int(decode_field(linef, r[linef.offset:linef.offset + linef.size])))
         for par, ls in lines.items():
             assert sorted(ls) == list(range(1, len(ls) + 1))
+
+
+def test_import_defaults_current_date_and_empty(tmp_path: Path,
+                                                monkeypatch: pytest.MonkeyPatch):
+    """Поля по умолчанию: ТекущаяДата/Сегодня, ПустоеЗначение/НовыйОбъект."""
+    from onec_converter.typify import KIND_DATE
+    monkeypatch.setattr('onec_converter.epf_load.read_metadata',
+                        lambda p: {'objects': [dict(REF_META)]})
+    _map = REF_FIELDS + [FixtureField('_Fld102', 'DT')]
+    _meta = dict(REF_META)
+    _meta['attributes'] = _meta['attributes'] + [
+        {'name': '_Fld102', 'field': '_Fld102', 'type': 'date', 'length': 8,
+         'precision': 0},
+    ]
+    monkeypatch.setattr('onec_converter.epf_load.read_metadata',
+                        lambda p: {'objects': [_meta]})
+    target = _receiver(tmp_path, _map, [])
+    T_DATE = TypeSpec(kinds=(KIND_DATE,), date_parts='datetime')
+    cfg = BridgeConfig(mode=MODE_CATALOG, obj_fullname='Справочник.Контрагенты',
+                       first_data_row=2,
+                       columns=[
+                           ColumnSpec(flag=1, attr='Код', search=1,
+                                      type_spec=T_STR40, mode='Устанавливать',
+                                      default='', lookup='Код',
+                                      owner_ref='', type_ref='',
+                                      type_elem='', col_num=1),
+                           ColumnSpec(flag=1, attr='_Fld102', search=0,
+                                      type_spec=T_DATE, mode='Устанавливать',
+                                      default='ТекущаяДата()', lookup='',
+                                      owner_ref='', type_ref='',
+                                      type_elem='', col_num=2),
+                           ColumnSpec(flag=1, attr='Наименование', search=0,
+                                      type_spec=T_STR40, mode='Устанавливать',
+                                      default='ПустоеЗначение()', lookup='',
+                                      owner_ref='', type_ref='',
+                                      type_elem='', col_num=3),
+                       ])
+    bridge = tmp_path / 'b.xlsx'
+    write_bridge(bridge, cfg, [['00001', None, None]])
+    rep = import_bridge(bridge, target, workdir=tmp_path / 'wd')
+    assert rep['ok'] and rep['created'] == 1
+    with Database1CD(Path(rep['copy_path'])) as db:
+        t = db.tables['_REFERENCE7']
+        drow = next(r for r in db.table_rows(t)
+                    if r[:1] != b'\x01'
+                    and decode_field(t.fields['_CODE'],
+                                     r[t.fields['_CODE'].offset:]
+                                     [:t.fields['_CODE'].size]) not in (None, ''))
+        df = t.fields['_Fld102']
+        raw = drow[df.offset:df.offset + df.size]
+        dv = decode_field(df, raw)
+        assert dv is not None  # ТекущаяДата установлена
+        nf = t.fields['_DESCRIPTION']
+        nv = decode_field(nf, drow[nf.offset:nf.offset + nf.size])
+        assert nv in (None, '')  # ПустоеЗначение -> поле не задано

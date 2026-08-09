@@ -207,7 +207,7 @@ def _row_values(cfg: BridgeConfig, row: list[Any],
         if cell in (None, ''):
             v: Any = None
             if col.default:
-                v, _ = to_value(col.type_spec, col.default)
+                v = _default_value(col.default, col.type_spec)
         elif isinstance(cell, (int, float, bool, _dt)):
             v = cell  # уже типизированное значение (из экспорта)
         else:
@@ -226,9 +226,28 @@ def _cell_text(row: list[Any], col: ColumnSpec) -> str:
 
 
 def _default_value(default: str, spec: TypeSpec) -> Any:
-    if default.strip().lower().startswith('сегодня'):
-        return _dt.now(UTC).date()
-    return to_value(spec, default)
+    """Базовые значения по умолчанию (аналог epf): сегодня/ТекущаяДата,
+    ПустоеЗначение, НовыйОбъект, иначе — через типизатор (возврат значения).
+
+    ТекущаяДата()/Сегодня() -> дата/время текущего момента в зависимости от
+    типа колонки; ПустоеЗначение()/НовыйОбъект() -> None (поле не трогать).
+    """
+    d = default.strip()
+    low = d.lower()
+    if low in ('сегодня', 'сегодня()', 'текущаядата', 'текущаядата()',
+               'текущая дата'):
+        now = _dt.now(UTC)
+        if KIND_DATE in spec.kinds:
+            if spec.date_parts == 'time':
+                return now.time()
+            if spec.date_parts == 'datetime':
+                return now.replace(tzinfo=None)
+        return now.date()
+    if low in ('пустоезначение', 'пустоезначение()', 'новыйобъект',
+               'новыйобъект()'):
+        return None
+    v, _ = to_value(spec, default)
+    return v
 
 
 def _resolve_ref(col: Any, text: str, db: Database1CD,
