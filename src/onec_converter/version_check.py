@@ -32,6 +32,30 @@ def current_version() -> str:
     return __version__
 
 
+def _semver_tuple(v: str) -> tuple[int, int, int]:
+    """(major, minor, patch) для семантического сравнения; невалидное -> (0,0,0)."""
+    nums: list[int] = []
+    for part in str(v).lstrip('v').split('.'):
+        digits = ''.join(ch for ch in part if ch.isdigit())
+        try:
+            nums.append(int(digits) if digits else 0)
+        except ValueError:
+            nums.append(0)
+        if len(nums) >= 3:
+            break
+    while len(nums) < 3:
+        nums.append(0)
+    return (nums[0], nums[1], nums[2])
+
+
+def _is_newer(latest: str | None, current: str) -> bool:
+    """True, если latest строго новее current (по semver). Dev/editable-версия
+    (local > PyPI) не считается обновлением."""
+    if not latest:
+        return False
+    return _semver_tuple(latest) > _semver_tuple(current)
+
+
 def _saved_check() -> dict[str, object] | None:
     try:
         data = json.loads(_VERSION_CACHE.read_text(encoding='utf-8'))
@@ -79,7 +103,7 @@ def render_version_banner(skip_update_check: bool = False) -> str:
         lines.append('(проверка обновления отключена через ONEC_NO_UPDATE_CHECK)')
         return '\n'.join(lines)
     latest = latest_version()
-    if latest and latest != current_version():
+    if _is_newer(latest, current_version()):
         lines.append(
             f'  ⚠ Доступна новая версия: {latest}. Обновитесь: '
             'python -m pip install --upgrade onec-converter')

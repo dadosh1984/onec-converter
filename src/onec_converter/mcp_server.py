@@ -17,10 +17,23 @@ from __future__ import annotations
 import asyncio
 import functools
 import json
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+# MCP SDK / pydantic-settings печатает в stderr предупреждение про
+# неразрешённую forward-reference ('lifespan'), которое путает MCP-клиентов
+# (pi/Claude читают stderr процесса, а баннер сервера должен быть первым и
+# единственным сообщением). Подавляем его только для этой категории.
+try:
+    warnings.filterwarnings(
+        'ignore',
+        message='.*Field .lifespan. has an incomplete definition.*',
+        module=r'pydantic_settings\.sources')
+except Exception:  # noqa: S110,BLE001 — фильтр никогда не роняет импорт
+    pass
 
 from mcp.server.fastmcp import FastMCP
 
@@ -129,13 +142,13 @@ def _server_meta() -> dict[str, object]:
     на PyPI. Вычисляется один раз на процесс, далее кэшируется в памяти;
     сетевой прост к PyPI не чаще раза в сутки (version_check)."""
     global _SERVER_META_CACHE
-    from .version_check import current_version
+    from .version_check import _is_newer, current_version
 
     if _SERVER_META_CACHE is not None:
         return _SERVER_META_CACHE
     meta: dict[str, object] = {'server_version': current_version()}
     latest = _latest_local_cache() or _latest_network()
-    if latest and latest != current_version():
+    if _is_newer(latest, current_version()):
         meta['update'] = {
             'available': True,
             'latest': latest,

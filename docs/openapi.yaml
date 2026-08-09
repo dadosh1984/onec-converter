@@ -4,7 +4,7 @@ info:
   description: >-
     Приёмник переноса данных: HTTP-сервис 1С (расширение
     extension_83). Спека сгенерирована из кода — scripts/gen_openapi.py.
-  version: 0.43.0
+  version: 0.43.1
 servers:
   - url: https://{host}/hsp/onec-converter
     variables:

@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+import json
+
 from onec_converter import __version__
 
 
@@ -76,7 +78,37 @@ def test_latest_version_cached(monkeypatch, tmp_path):
     assert len(calls) == 1, 'второй вызов должен быть из кеша, не из сети'
 
 
-# ---- _server_meta встраивает server_version и update ----
+# ---- semver: dev-версия (local > PyPI) не считается обновлением ----------------
+def test_semver_is_newer():
+    from onec_converter.version_check import _is_newer, _semver_tuple
+
+    assert _is_newer('0.43.1', '0.43.0') is True
+    assert _is_newer('1.0.0', '0.99.99') is True
+    # local dev новее опубликованного -> НЕ обновление
+    assert _is_newer('0.42.0', '0.43.0') is False
+    assert _is_newer('0.43.0', '0.43.0') is False
+    assert _is_newer('0.43.1', '0.43.1') is False
+    assert _is_newer(None, '0.43.0') is False
+    # семер-кортежи
+    assert _semver_tuple('v0.43.0') == (0, 43, 0)
+    assert _semver_tuple('0.43.0-beta') >= (0, 43, 0)
+
+
+def test_banner_semver_no_false_update(tmp_path, capsys, monkeypatch):
+    """Если кеш содержит 0.42.0, а установлена 0.43.0 (dev) — НЕ зовёт
+    обновить до 'более старой' версии."""
+    from onec_converter import version_check as vc
+
+    vc._VERSION_CACHE = tmp_path / 'vc'
+    vc._VERSION_CACHE.write_text(
+        json.dumps({'ts': 2 ** 31, 'latest': '0.42.0'}), encoding='utf-8')
+    monkeypatch.setattr(vc, 'latest_version', lambda: '0.42.0')
+    vc.print_version_to_stderr(skip_update_check=False, _now='09:00:05')
+    err = capsys.readouterr().err
+    assert 'Доступна новая версия' not in err  # 0.42.0 не новее 0.43.0
+    assert '✔' in err
+
+
 def test_server_meta_injects_version_and_update(monkeypatch):
     from onec_converter import mcp_server
 
