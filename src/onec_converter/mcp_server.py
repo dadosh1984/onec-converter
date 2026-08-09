@@ -448,6 +448,49 @@ def compare_structures(source_dir: str, target_dir: str, format: str = 'json',
                       ensure_ascii=False)
 
 
+@visible_tool('auto_map_schemas', 'Авто-маппинг полей между двумя базами по именам/синонимам (Фаза 40)')
+def auto_map_schemas(source_dir: str, target_dir: str) -> str:
+    """Предложить правила TOON (rules.json) по нормализованному имени.
+
+    Сопоставляет объекты по kind+имени/синониму, реквизиты — по имени
+    (нормализованному). Возвращает {ok, rules, matched, unmatched} — готовую
+    основу для map, LLM лишь редактирует исключения.
+    """
+    from .ai_skills import auto_map_schemas as _amap
+    from .source_8x_file import read_metadata
+
+    src = Path(source_dir) / '1Cv8.1CD'
+    tgt = Path(target_dir) / '1Cv8.1CD'
+    if not src.is_file() or not tgt.is_file():
+        return json.dumps({'ok': False,
+                           'error': 'нет 1Cv8.1CD в source_dir/target_dir'},
+                          ensure_ascii=False)
+    try:
+        res = _amap(read_metadata(src), read_metadata(tgt))
+    except Exception as exc:  # noqa: BLE001 — вернуть ошибку как JSON
+        return json.dumps({'ok': False, 'error': str(exc)},
+                          ensure_ascii=False)
+    return json.dumps(res, ensure_ascii=False)
+
+
+@visible_tool('explain_diff', 'Объяснение причин расхождений структур двух баз (Фаза 40)')
+def explain_diff(source_dir: str, target_dir: str) -> str:
+    """Человекочитаемые причины расхождений (а не сухие списки diff)."""
+    from .ai_skills import explain_diff as _explain
+    from .source_8x_file import read_metadata
+
+    src = Path(source_dir) / '1Cv8.1CD'
+    tgt = Path(target_dir) / '1Cv8.1CD'
+    if not src.is_file() or not tgt.is_file():
+        return json.dumps({'ok': False,
+                           'error': 'нет 1Cv8.1CD в source_dir/target_dir'},
+                          ensure_ascii=False)
+    md = diff_structures(read_metadata(src), read_metadata(tgt))
+    reasons = _explain(md)
+    return json.dumps({'ok': True, 'explanations': reasons[:50]},
+                      ensure_ascii=False)
+
+
 @visible_tool('search_schema', 'Двунаправленный поиск метаданные↔таблицы (идея C1: 1CDBStorageStructureInfo)')
 def search_schema(source_dir: str, query: str) -> str:
     """Двунаправленный поиск метаданные↔таблицы (идея C1: 1CDBStorageStructureInfo).

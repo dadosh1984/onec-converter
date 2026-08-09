@@ -323,13 +323,11 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 - [x] [assumption] ворота зелёные; релиз 0.22.0
 ## Фаза 40 — AI-навыки (0.23.0)
 
-- [ ] [fact] MCP auto_map_schemas: авто-маппинг полей по именам/синонимам
-      (без внешних LLM-зависимостей)
-- [ ] [fact] MCP explain_diff: человекочитаемые причины расхождений схем
-- [ ] [fact] skill autonomous_migration: сквозной сценарий миграции
-      по командам CLI (плейбук)
-- [ ] [fact] context_compressor: саммари метаданных (5000+ таблиц) для LLM
-- [ ] [assumption] ворота зелёные; релиз 0.23.0
+- [x] [fact] MCP auto_map_schemas: авто-маппинг по именам/синонимам -> rules
+- [x] [fact] MCP explain_diff: человекочитаемые причины расхождений
+- [x] [fact] ai_skills.compress_metadata: саммари метаданных для LLM
+- [x] [fact] examples/: autonomous_migration + context_compressor
+- [x] [assumption] ворота зелёные; релиз 0.23.0
 
 ## Бэклог (опционально, по востребованности)
 

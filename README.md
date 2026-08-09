@@ -187,6 +187,15 @@ onec-converter shell --source-dir ./src
 > exit
 ```
 
+### AI-навыки для LLM-агентов (Фаза 40)
+- MCP `auto_map_schemas(source_dir, target_dir)` — детерминированный
+  авто-маппинг объектов/реквизитов по именам/синонимам → готовые правила TOON.
+- MCP `explain_diff(source_dir, target_dir)` — человекочитаемые причины
+  расхождений структур (а не сухие списки).
+- `examples/context_compressor.md` — сжатие метаданных (тысяч объектов) до
+  краткого саммари для контекста LLM (`compress_metadata`).
+- `examples/autonomous_migration.md` — сквозной сценарий миграции по командам.
+
 ### Разработка и качество (Фаза 28)
 ```
 onec-converter sonar-report --target src --format xml --out sonar.xml
