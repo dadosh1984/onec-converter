@@ -30,6 +30,13 @@ def collect_handlers() -> list[str]:
     return re.findall(r'Функция\s+([^\s(]+)\(Запрос\) Экспорт', bsl)
 
 
+def _package_version() -> str:
+    """Версия пакета из src/onec_converter/__init__.py (единый источник)."""
+    init = (ROOT / 'src/onec_converter/__init__.py').read_text(encoding='utf-8')
+    m = re.search(r'__version__\s*=\s*[\'"]([^\'"]+)[\'"]', init)
+    return m.group(1) if m else '0.0.0'
+
+
 def build_openapi(endpoints: list[dict[str, str]],
                   handlers: list[str]) -> str:
     lines = [
@@ -39,7 +46,7 @@ def build_openapi(endpoints: list[dict[str, str]],
         '  description: >-',
         '    Приёмник переноса данных: HTTP-сервис 1С (расширение',
         '    extension_83). Спека сгенерирована из кода — scripts/gen_openapi.py.',
-        '  version: 0.14.0',
+        f'  version: {_package_version()}',
         'servers:',
         '  - url: https://{host}/hsp/onec-converter',
         '    variables:',
@@ -57,8 +64,9 @@ def build_openapi(endpoints: list[dict[str, str]],
         lines.append(f'      operationId: {op}')
         lines.append('      security:')
         lines.append('        - ApiKeyAuth: []')
-        if path == '/load':
-            lines.append('        - BearerAuth: []')
+        # оба обработчика (МетаданныеИБ / ЗаписьДанных) зовут ПроверитьКлюч,
+        # который принимает и X-API-Key, и Bearer JWT — схемы одинаковы
+        lines.append('        - BearerAuth: []')
         lines.append('      responses:')
         lines.append("        '200':")
         lines.append('          description: Успешный ответ JSON')

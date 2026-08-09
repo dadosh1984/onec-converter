@@ -333,14 +333,13 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 
 ## Фаза 41 — Хирургические дефекты раунда 4 (0.24.0)
 
-- [ ] [fact] gen_openapi.py: версия из onec_converter.__version__ (не литерал)
-- [ ] [fact] gen_openapi.py: BearerAuth для /metadata и /load (везде, где ПроверитьКлюч)
-- [ ] [fact] audit._rotate(): маркер-запись {"marker":"rotated","prev_hash":...} первой строкой
-- [ ] [fact] verify_audit(): валидация prev_hash первой записи (пуст для файла без предыстории)
-- [ ] [fact] sql_source: whitelist-валидация table в fetch_rows + параметризация; скобки в WHERE MSSQL
-- [ ] [fact] тесты: openapi version==__version__; golden-тест ротации; verify_audit сценарий «ротация→первая запись»; sql-инъекция
-- [ ] [assumption] ворота зелёные; релиз 0.24.0
-
+- [x] [fact] gen_openapi.py: версия из onec_converter.__version__ (не литерал)
+- [x] [fact] gen_openapi.py: BearerAuth для /metadata и /load (везде, где ПроверитьКлюч)
+- [x] [fact] audit._rotate(): маркер-запись {"marker":"rotated","prev_hash":...} первой строкой
+- [x] [fact] verify_audit(): валидация prev_hash первой записи (пуст для файла без предыстории)
+- [x] [fact] sql_source: whitelist-валидация table в fetch_rows + параметризация; скобки в WHERE MSSQL
+- [x] [fact] тесты: openapi version==__version__; golden-тест ротации; verify_audit сценарий «ротация→первая запись»; sql-инъекция
+- [x] [assumption] ворота зелёные; релиз 0.24.0
 ## Фаза 42 — Укрепление аудита/комплаенс (0.25.0)
 
 - [ ] [fact] verify_audit(cross_files=True): сверка цепочки audit.jsonl + .1 + ...

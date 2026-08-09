@@ -11,6 +11,7 @@ _AccumRg) — большая отдельная работа. Здесь реа�
 """
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol
@@ -67,6 +68,9 @@ def build_sql_source(kind: str, dsn: str,
     if driver is None:
         driver = _driver_for(kind)
     return GenericSqlSource(kind, dsn, driver)
+
+
+_IDENT_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
 
 
 class GenericSqlSource:
@@ -159,8 +163,8 @@ class GenericSqlSource:
                 'postgres': ("SELECT column_name FROM information_schema.columns "
                              "WHERE table_schema='public' AND table_name=%s"),
                 'mssql': ("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
-                          "WHERE TABLE_NAME=? AND COLUMN_NAME LIKE '\\_Fld%' OR "
-                          "COLUMN_NAME='_IDRREF'"),
+                          "WHERE TABLE_NAME=? AND (COLUMN_NAME LIKE "
+                          "'\\_Fld%' ESCAPE '\\' OR COLUMN_NAME='_IDRREF')"),
             }[self.kind]
             conn = self._connect()
             cur = conn.cursor()
@@ -173,8 +177,21 @@ class GenericSqlSource:
                                   columns={c: '' for c in cols}))
         return objs
 
+    def _quote_ident(self, name: str) -> str:
+        """Валидировать и закавычить идентификатор таблицы (anti-injection).
+
+        Публичный fetch_rows принимает имя таблицы; без этой проверки
+        произвольная строка попала бы в SQL. Разрешаем только безопасный
+        набор символов и экранируем по правилам конкретной СУБД.
+        """
+        if not _IDENT_RE.fullmatch(name):
+            raise SqlSourceError(f'недопустимое имя таблицы: {name!r}')
+        if self.kind == 'postgres':
+            return f'"{name}"'
+        return f'[{name}]'
+
     def fetch_rows(self, table: str) -> Iterable[dict[str, Any]]:
-        return self._q(f"SELECT * FROM {table}")
+        return self._q(f'SELECT * FROM {self._quote_ident(table)}')
 
     # ---- intermediate-совместимый чтение строк ----
     def read_objects(self) -> Iterable[dict[str, Any]]:

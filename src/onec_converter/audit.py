@@ -53,6 +53,7 @@ def verify_audit(path: str | Path) -> list[dict[str, str]]:
     """
     errors: list[dict[str, str]] = []
     prev = ''
+    first = True
     with open(path, encoding='utf-8') as f:
         for n, line in enumerate(f, 1):
             line = line.strip()
@@ -70,7 +71,15 @@ def verify_audit(path: str | Path) -> list[dict[str, str]]:
             expect = _sha256(json.dumps(body, sort_keys=True, ensure_ascii=False))
             if got_hash and got_hash != expect:
                 errors.append({'line': str(n), 'error': 'подменён hash записи'})
-            if prev and got_prev != prev:
+            if first:
+                first = False
+                if rec.get('marker') != 'rotated' and got_prev:
+                    # файл без предыстории (маркера ротации нет): корень
+                    # цепочки обязан быть пустым, иначе prev_hash подделан
+                    errors.append({'line': str(n), 'error': 'первая запись '
+                                   'файла не должна иметь prev_hash '
+                                   '(файл без предыстории)'})
+            elif prev and got_prev != prev:
                 errors.append({'line': str(n),
                                'error': f'prev_hash не совпадает ({got_prev!r} != {prev!r})'})
             prev = got_hash or expect
@@ -101,21 +110,38 @@ class AuditLog:
         if self._path:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             self._last_hash = _last_record_hash(self._path)
+            # ротация проверяется при открытии, ДО построения первой записи
+            # (иначе prev_hash записи не совпал бы с маркером ротации)
+            if (self._path.is_file()
+                    and self._path.stat().st_size > self._max_bytes):
+                self._rotate()
 
     def _handle(self) -> TextIO | None:
         if self._fh is None and self._path is not None:
-            if self._path.is_file() and self._path.stat().st_size > self._max_bytes:
-                self._rotate()
             self._fh = open(self._path, 'a', encoding='utf-8')  # noqa: SIM115
         return self._fh
 
     def _rotate(self) -> None:
-        """Ротация: содержимое файла ужимается до одной записи-маркера."""
+        """Ротация: старый файл -> .1, новый файл начинается маркером.
+
+        Маркер связывает цепочку с предыдущим файлом: его prev_hash = хеш
+        последней записи старого файла (теперь в .1). Так verify_audit
+        может отличить легитимную ротацию от подмены первой записи.
+        """
         if self._path is None:
             return
         bak = self._path.with_suffix(self._path.suffix + '.1')
         shutil.copy2(self._path, bak)
-        self._path.write_text('', encoding='utf-8')
+        marker = {
+            'marker': 'rotated',
+            'ts': datetime.now(UTC).isoformat(timespec='seconds'),
+            'prev_hash': self._last_hash,
+        }
+        marker['hash'] = _sha256(
+            json.dumps(marker, sort_keys=True, ensure_ascii=False))
+        self._path.write_text(
+            json.dumps(marker, ensure_ascii=False) + '\n', encoding='utf-8')
+        self._last_hash = marker['hash']
 
     @property
     def path(self) -> Path | None:
