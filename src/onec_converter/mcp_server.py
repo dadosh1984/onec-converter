@@ -35,6 +35,19 @@ from .timings import GLOBAL as GLOBAL_TIMINGS
 from .validate import validate_batch
 
 mcp = FastMCP('onec-converter')
+# serverInfo.version отдаём НАШ version-релиз (а не версию MCP SDK), чтобы
+# любой MCP-клиент (Claude/Cursor/pi/др.) видел версию инструмента по
+# стандарту (поле serverInfo ответа initialize). Поле приватное, берём с
+# защитой: на другой версии SDK даём __version__ через атрибут.
+from . import __version__ as _VERSION
+
+_vsrv = getattr(mcp, '_mcp_server', None)
+if _vsrv is not None:
+    try:
+        _vsrv.version = _VERSION
+    except Exception as exc:  # noqa: BLE001 — не роняем сервер из-за version
+        print(f'[onec-converter] не вышло задать serverInfo.version: {exc}',
+              file=__import__('sys').stderr, flush=True)
 
 # Универсальная последовательность команд переноса (плейбук). Поле `next`
 # в ответах тулов ведёт агента по этим шагам; тул playbook() возвращает
@@ -107,6 +120,50 @@ class RbacError(Exception):
     """Недостаточно прав роли MCP-клиента."""
 
 
+_SERVER_META_CACHE: dict[str, object] | None = None
+
+
+def _server_meta() -> dict[str, object]:
+    """Метаданные сервера для встраивания в ответ каждого тула.
+    server_version — установленный релиз; update — при наличии новой версии
+    на PyPI. Вычисляется один раз на процесс, далее кэшируется в памяти;
+    сетевой прост к PyPI не чаще раза в сутки (version_check)."""
+    global _SERVER_META_CACHE
+    from .version_check import current_version
+
+    if _SERVER_META_CACHE is not None:
+        return _SERVER_META_CACHE
+    meta: dict[str, object] = {'server_version': current_version()}
+    latest = _latest_local_cache() or _latest_network()
+    if latest and latest != current_version():
+        meta['update'] = {
+            'available': True,
+            'latest': latest,
+            'message': 'Доступна новая версия onec-converter: '
+                       f'{latest} (pip install --upgrade onec-converter)'}
+    _SERVER_META_CACHE = meta
+    return meta
+
+
+def _latest_local_cache() -> str | None:
+    from .version_check import _VERSION_CACHE
+
+    try:
+        saved = json.loads(_VERSION_CACHE.read_text(encoding='utf-8'))
+        return (saved.get('latest') or '') or None
+    except (OSError, ValueError):
+        return None
+
+
+def _latest_network() -> str | None:
+    try:
+        from .version_check import latest_version
+
+        return latest_version()
+    except Exception:  # noqa: BLE001 — проверка не должна ронять тул
+        return None
+
+
 def visible_tool(name: str, description: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Декоратор тула: логирует применение команды в терминал (stderr)
     и регистрирует тул в FastMCP. Ответ дополняется полем `next`
@@ -130,6 +187,11 @@ def visible_tool(name: str, description: str) -> Callable[[Callable[..., Any]], 
                         data = json.loads(result)
                         if isinstance(data, dict):
                             data.setdefault('next', PLAYBOOK_NEXT.get(name, ''))
+                            data.setdefault('server_version',
+                                            _server_meta()['server_version'])
+                            upd = _server_meta().get('update')
+                            if isinstance(upd, dict) and upd.get('available'):
+                                data.setdefault('update', upd)
                             return json.dumps(data, ensure_ascii=False)
                     except (ValueError, TypeError):
                         pass
@@ -874,8 +936,13 @@ def server_main(transport: str = 'stdio') -> None:
     только импортировал модуль и завершался — сервер не запускался.
     Теперь точка входа run() держит stdio-транспорт для MCP-клиентов
     (Claude/Cursor/pi), stdout занят JSON-RPC, события — в stderr.
+    При старте в stderr печатается версия релиза и (если есть) уведомление
+    о доступной новой версии на PyPI (см. version_check).
     """
     try:
+        from .version_check import print_version_to_stderr
+
+        print_version_to_stderr()
         mcp.run(transport=transport)  # type: ignore[arg-type]
     except KeyboardInterrupt:
         pass
