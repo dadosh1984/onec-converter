@@ -1,0 +1,8 @@
+# Proposal — фаза-36-0-19
+
+**Goal:** Фаза 36 (0.19.0) — SQL-источники (PostgreSQL / MSSQL) в onec-converter. (1) Абстракция source: модуль src/onec_converter/sql_source.py — контракт чтения метаданных/строк из SQL-ИБ (для PostgreSQL и MSSQL), не привязывая к драйверу жёстко (импорт psycopg2/pyodbc лениво, опционально); функции list_objects/read_object_rows возвращающие строки в intermediate-совместимом виде (как read_table). (2) PostgreSQL-адаптер: читает v8_metadata (таблицы конфигурации: объект-таблицы _… именование по DBNames), v8_reference — маппинг GUID->имя, регистры _InfoRg/_AccumRg. Подключение через ONEC_TEST / параметры --source-url/dsn. (3) MSSQL-адаптер: те же таблицы через pyodbc (lazy). (4) CLI/extract: параметр --source-kind 1cd|postgres|mssql (по умолчанию 1cd), --source-url; при sql-источнике extract читает из БД. (5) тесты фейковые без реальных серверов: mock-адаптер (класс с dsn, метод fetch_metadata/fetch_rows), юнит-проверка абстракции и что extract с --source-kind использует его; НЕ подключаться к реальным серверам. Честно: полноценный парсинг v8_* таблиц — большая работа; реализую контракт + адаптеры с базовым чтением v8_metadata (кода_таблиц) и документирую ограничения. CHANGELOG 0.19.0, план ✅, релиз.
+
+- Platform: тесты в E:\test через gates.sh; версия 0.19.0; mypy только src; SQL-чтение через абстракцию без жёстких зависимостей
+- Constraints: compact
+- Budget: compact
+- **Lessons applied (v0.12):** mcp-python-1-7:forge:73e3469b3d99, фазу-23-conformance-тесты:forge:753265ca3073, фаза-11-новая-порция:forge:537c39f668a9, mcp-python-1-7:forge:97d7268f0175, фазу-25-audit-логирование:forge:7c216dc57da7

@@ -201,12 +201,28 @@ def cmd_extract(args: argparse.Namespace) -> int:
             [o.strip() for o in args.objects.split(',')]) if args.objects else []
     except ValueError as exc:
         raise CLIError(str(exc)) from exc
-    ver = _detect_version(args.source_dir)
-    if ver == '77':
-        objs = _extract_77(args.source_dir, encoding, limit, specs)
+    skind = getattr(args, 'source_kind', '1cd') or '1cd'
+    if skind != '1cd':
+        from .sql_source import SqlSourceError, build_sql_source
+        if not args.source_url:
+            return _err('--source-url обязателен при --source-kind != 1cd')
+        try:
+            src = build_sql_source(skind, args.source_url)
+            try:
+                objs = list(src.read_objects())
+            finally:
+                src.close()
+        except SqlSourceError as exc:
+            return _err(str(exc))
     else:
-        objs = _extract_8x(args.source_dir, limit, specs,
-                            workers=getattr(args, 'workers', 1))
+        ver = _detect_version(args.source_dir)
+        if ver == '77':
+            objs = _extract_77(args.source_dir, encoding, limit, specs)
+        else:
+            objs = _extract_8x(args.source_dir, limit, specs,
+                               workers=getattr(args, 'workers', 1))
+    if limit and len(objs) > limit:
+        objs = objs[:limit]
     if args.anonymize_fields:
         from .anonymizer import Anonymizer
         fields = [f.strip() for f in args.anonymize_fields.split(',') if f.strip()]
@@ -749,6 +765,11 @@ def build_parser() -> argparse.ArgumentParser:
                            help='JSONL-журнал аудита переноса (Фаза 25)')
     p_extract.add_argument('--workers', type=int, default=1,
                            help='число потоков чтения (Фаза 34; 1 = последовательно)')
+    p_extract.add_argument('--source-kind', default='1cd',
+                           choices=['1cd', 'postgres', 'mssql'],
+                           help='источник: файл 1CD или SQL-ИБ (Фаза 36)')
+    p_extract.add_argument('--source-url', default='',
+                           help='DSN/URL подключения к SQL-ИБ (при --source-kind)')
 
     p_map = sub.add_parser('map', help='Правила маппинга (TOON)')
     p_map.add_argument('--rules-file', default='')

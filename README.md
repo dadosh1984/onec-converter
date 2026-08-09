@@ -83,6 +83,19 @@ onec-converter extract --source-dir "1С_7.7" --out extract.json \
     --objects "Справочник.Номенклатура,Справочник.Контрагенты"
 ```
 
+**SQL-источники (Фаза 36):** извлечение из ИБ 1С на сервере, а не из файла
+`1Cv8.1CD`:
+```
+onec-converter extract --source-kind postgres --source-url "dbname=ib host=/var/run/postgresql" --out extract.json
+onec-converter extract --source-kind mssql --source-url "DRIVER=ODBC Driver 17;SERVER=srv;DATABASE=ib;UID=u;PWD=p" --out extract.json
+```
+Адаптер читает системные таблицы `information_schema`/`INFORMATION_SCHEMA`
+(таблицы `_Reference*/_Document*/_InfoRg*/_AccumRg*/_Enum*`). Нужен драйвер:
+`psycopg2` (PostgreSQL) или `pyodbc` (MS SQL), устанавливается отдельно;
+structure конфигурации перенос регистрирует как [spike] — детальный парсинг
+`v8_metadata` ограничен. Без `1Cv8.1CD` в `--source-dir` при `--source-kind`
+не требуется.
+
 **Селективный перенос по разделам (Фаза 29.2):** `--objects` фильтрует по
 конфигурационным объектам (kind+имя из метаданных):
 - точно: `Справочник.Номенклатура`, `Документ.БанковскиеВыписки`;

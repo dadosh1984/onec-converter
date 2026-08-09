@@ -3,6 +3,20 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 0.19.0 (2026-08)
+
+### SQL-источники PostgreSQL / MS SQL (Фаза 36)
+- sql_source.py: контракт SqlSource (list_tables/fetch_metadata/fetch_rows),
+  GenericSqlSource адаптер поверх драйвера (ленивый импорт psycopg2/pyodbc),
+  SqlSourceError с подсказкой; build_sql_source(kind, dsn[, driver]).
+- `extract --source-kind 1cd|postgres|mssql`, `--source-url`: извлечение из
+  ИБ на сервере вместо файла 1Cv8.1CD (таблицы _Reference*/_Document*/
+  _InfoRg*/_AccumRg*/_Enum* через information_schema).
+- Честная [spike]-граница: детальный парсинг v8_metadata ограничен —
+  документировано в README.
+- Тесты +5 на mock-драйвере (без реальных серверов).
+- Ворота: pytest (+5), conformance, ruff, mypy (46), check_bsl, vitest.
+
 ## 0.18.0 (2026-08)
 
 ### Регистры и перечисления (Фаза 35)

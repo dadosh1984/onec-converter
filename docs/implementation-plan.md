@@ -289,13 +289,13 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 
 ## Фаза 36 — SQL-источники (0.19.0)
 
-- [ ] [fact] postgres_schema: чтение метаданных и данных из PostgreSQL
-      (v8_metadata, v8_reference, _InfoRg)
-- [ ] [fact] mssql_schema: чтение из MS SQL Server (pyodbc)
-- [ ] [fact] extract: параметр источника 1CD|postgres|mssql (общая
-      абстракция source); тесты на мок-схеме
-- [ ] [assumption] ворота зелёные; релиз 0.19.0
-
+- [x] [fact] sql_source.py: SqlSource (list_tables/fetch_metadata/fetch_rows),
+      GenericSqlSource, build_sql_source, SqlSourceError
+- [x] [fact] extract --source-kind 1cd|postgres|mssql + --source-url
+- [x] [fact] адаптеры: ленивый импорт psycopg2/pyodbc; таблицы _Reference*
+      _Document* _InfoRg* _AccumRg* _Enum* через information_schema
+- [x] [fact] tests +5 на mock-драйвере; README — SQL-источники
+- [x] [assumption] ворота зелёные; релиз 0.19.0
 ## Фаза 37 — Безопасность и комплаенс (0.20.0)
 
 - [ ] [fact] pii_scanner: ИНН/СНИЛС/карты/телефоны; профиль UZ
