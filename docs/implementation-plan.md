@@ -342,14 +342,13 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 - [x] [assumption] ворота зелёные; релиз 0.24.0
 ## Фаза 42 — Укрепление аудита/комплаенс (0.25.0)
 
-- [ ] [fact] verify_audit(cross_files=True): сверка цепочки audit.jsonl + .1 + ...
-- [ ] [fact] _last_record_hash: кеш при открытии (не читать весь файл каждый раз)
-- [ ] [fact] pii_masking=True по умолчанию (opt-out) + changelog-запись о разнице
-- [ ] [fact] crypto_utils.py: общий sha256/hex/hmac (audit, s3_client, anonymizer)
-- [ ] [fact] hypothesis: мутация байта в случайной записи ВСЕГДА детектируется verify_audit
-- [ ] [fact] CLI audit-verify --audit-file; доки: формула hash/prev_hash
-- [ ] [assumption] ворота зелёные; релиз 0.25.0
-
+- [x] [fact] verify_audit(cross_files=True): сверка цепочки audit.jsonl + .1 + ...
+- [x] [fact] _last_record_hash: кеш при открытии (не читать весь файл каждый раз)
+- [x] [fact] pii_masking=True по умолчанию (opt-out) + changelog-запись о разнице
+- [x] [fact] crypto_utils.py: общий sha256/hex/hmac (audit, s3_client, anonymizer)
+- [x] [fact] hypothesis: мутация байта в случайной записи ВСЕГДА детектируется verify_audit
+- [x] [fact] CLI audit-verify --audit-file; доки: формула hash/prev_hash
+- [x] [assumption] ворота зелёные; релиз 0.25.0
 ## Фаза 43 — SQL-источники до production-grade (0.26.0)
 
 - [ ] [fact] _connect(): connect_timeout (не зависать на недоступном сервере)

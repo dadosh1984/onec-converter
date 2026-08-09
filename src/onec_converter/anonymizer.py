@@ -16,8 +16,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import os
 import re
 import warnings
@@ -103,8 +101,10 @@ def _resolve_secret(secret: str | None) -> str:
 
 def _hash_token(value: str, secret: str | None = None) -> str:
     """HMAC-SHA256-псевдоним строки (стабильно, без ключа невосстановимо)."""
+    from .crypto_utils import hmac_sha256_hex
+
     key = _resolve_secret(secret).encode('utf-8')
-    return hmac.new(key, value.encode('utf-8'), hashlib.sha256).hexdigest()
+    return hmac_sha256_hex(key, value)
 
 
 class Anonymizer:

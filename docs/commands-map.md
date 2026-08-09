@@ -3,7 +3,7 @@
 Сгенерировано из фактического реестра: CLI 23 подкоманды, MCP 13 тулов.
 Поток данных: inspect → extract → map → transform → load → verify.
 
-## CLI (23)
+## CLI (24)
 
 | Команда | Вход | Выход | Назначение |
 |---|---|---|---|
@@ -30,6 +30,7 @@
 | mint-token | secret | JWT | выпуск локального HS256 Bearer-токена (Фаза 33) |
 | pii-report | audit.jsonl | JSON | отчёт по анонимизации ПДн (152-ФЗ/152 УЗ, Фаза 37) |
 | shell | source-dir | REPL | интерактивное исследование базы (tables/query, Фаза 39) |
+| audit-verify | audit.jsonl | rc | проверка tamper-evident цепочки (+ --cross-files, Фаза 42) |
 
 Общие флаги: `--source-dir`, `--out`, `--format json|xlsx`, `--audit-file`.
 

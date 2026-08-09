@@ -773,6 +773,23 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit_verify(args: argparse.Namespace) -> int:
+    """Проверка tamper-evident цепочки журнала (Фаза 42)."""
+    from .audit import verify_audit
+
+    try:
+        errs = verify_audit(args.audit_file, cross_files=args.cross_files)
+    except (OSError, ValueError) as exc:
+        return _err(f'audit-verify: {exc}')
+    if errs:
+        for e in errs:
+            print(json.dumps(e, ensure_ascii=False))
+        print(f'audit-verify: {len(errs)} нарушений', file=sys.stderr)
+        return 1
+    print('audit-verify: цепочка цела')
+    return 0
+
+
 # ---- entry point ----
 
 def build_parser() -> argparse.ArgumentParser:
@@ -807,8 +824,10 @@ def build_parser() -> argparse.ArgumentParser:
                            help='источник: файл 1CD или SQL-ИБ (Фаза 36)')
     p_extract.add_argument('--source-url', default='',
                            help='DSN/URL подключения к SQL-ИБ (при --source-kind)')
-    p_extract.add_argument('--pii-masking', action='store_true',
-                           help='скрывать ПДн (ИНН/СНИЛС/тел) в журнале аудита (Фаза 37)')
+    p_extract.add_argument('--no-pii-masking', dest='pii_masking',
+                           action='store_false', default=True,
+                           help='не скрывать ПДн (ИНН/СНИЛС/тел) в журнале аудита '
+                           '(по умолчанию маскируются, Фаза 42)')
 
     p_map = sub.add_parser('map', help='Правила маппинга (TOON)')
     p_map.add_argument('--rules-file', default='')
@@ -824,8 +843,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_transform.add_argument('--preview', type=int, default=0)
     p_transform.add_argument('--audit-file', default='',
                              help='JSONL-журнал аудита переноса (Фаза 25)')
-    p_transform.add_argument('--pii-masking', action='store_true',
-                             help='скрывать ПДн в журнале аудита (Фаза 37)')
+    p_transform.add_argument('--no-pii-masking', dest='pii_masking',
+                             action='store_false', default=True,
+                             help='не скрывать ПДн в журнале аудита (по умолчанию '
+                             'маскируются, Фаза 42)')
 
     p_load = sub.add_parser('load', help='Загрузка в приёмник (файл/HTTP/прямая запись)')
     p_load.add_argument('--input', required=True)
@@ -855,8 +876,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help='общий секрет для локального mint-token (HS256 JWT, Фаза 33)')
     p_load.add_argument('--index-repair', action='store_true',
                         help='сгенерировать скрипт восстановления индексов (--direct, Фаза 34)')
-    p_load.add_argument('--pii-masking', action='store_true',
-                        help='скрывать ПДн в журнале аудита (Фаза 37)')
+    p_load.add_argument('--no-pii-masking', dest='pii_masking',
+                        action='store_false', default=True,
+                        help='не скрывать ПДн в журнале аудита (по умолчанию '
+                        'маскируются, Фаза 42)')
     p_load.add_argument('--dry-run', action='store_true',
                         help='демо-план без записи/отправки (Фаза 39)')
     p_load.add_argument('--retries', type=int, default=0,
@@ -914,6 +937,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_audit.add_argument('--op', default='', help='extract|transform|load')
     p_audit.add_argument('--obj', default='', help='подстрока имени объекта')
     p_audit.add_argument('--tail', type=int, default=0, help='последние N записей')
+
+    p_av = sub.add_parser('audit-verify',
+                          help='Проверка tamper-evident цепочки журнала (Фаза 42)')
+    p_av.add_argument('--audit-file', required=True, help='JSONL-журнал')
+    p_av.add_argument('--cross-files', action='store_true',
+                      help='сверять границы с архивами ротации (.1/.2/...)')
     p_audit.add_argument('--json', action='store_true', help='полные JSON-записи')
 
     p_tl = sub.add_parser('techlog',
@@ -989,7 +1018,7 @@ def main(argv: list[str] | None = None) -> int:
     # аудит (Фаза 25): файл из --audit-file или ONEC_AUDIT_FILE (для MCP)
     audit_file = getattr(args, 'audit_file', '') or os.environ.get('ONEC_AUDIT_FILE', '')
     if audit_file:
-        set_audit(audit_file, pii_masking=getattr(args, 'pii_masking', False))
+        set_audit(audit_file, pii_masking=getattr(args, 'pii_masking', True))
     handlers: dict[str, Callable[[argparse.Namespace], int]] = {
         'inspect': cmd_inspect,
         'extract': cmd_extract,
@@ -1006,6 +1035,7 @@ def main(argv: list[str] | None = None) -> int:
         'metrics': cmd_metrics,
         'clone-db': cmd_clone_db,
         'audit': cmd_audit,
+        'audit-verify': cmd_audit_verify,
         'techlog': cmd_techlog,
         'fetch-config': cmd_fetch_config,
         'dump-report': cmd_dump_report,

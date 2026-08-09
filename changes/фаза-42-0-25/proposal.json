@@ -1,0 +1,16 @@
+{
+  "title": "фаза-42-0-25",
+  "goal": "Фаза 42 (0.25.0) — укрепление аудита/комплаенс: (1) verify_audit(cross_files=True) сверяет границы с архивами ротации .1/.2/... (prev_hash первой записи = хеш последней записи предыдущего файла); (2) _last_record_hash кешируется по (путь, mtime, size) — повторные открытия не перечитывают файл; (3) pii_masking=True по умолчанию (opt-out, флаг CLI инвертирован в --no-pii-masking); (4) crypto_utils.py — единый sha256/hmac для audit/s3_client/anonymizer; (5) мутационный fuzz: любая посимвольная мутация записи детектируется verify_audit; (6) CLI audit-verify --audit-file [--cross-files] + формула hash/prev_hash в доке. Тесты +9 в tests/test_phase42_audit.py. CHANGELOG 0.25.0, план ✅, релиз.",
+  "platform": "тесты в E:\\test через gates.sh; версия 0.25.0; mypy только src; pii_masking теперь opt-out (default True); флаг CLI --no-pii-masking",
+  "constraints": "compact",
+  "budget": "compact",
+  "clarity": "vague",
+  "language": "ru",
+  "appliesLessons": [
+    "фазу-25-audit-логирование:forge:7c216dc57da7",
+    "фазу-23-conformance-тесты:forge:753265ca3073",
+    "фазу-24-полный-сценарий:forge:1b6dbaa2498b",
+    "фаза-37-0-20:forge:450954ba4c38",
+    "фаза-37-0-20:forge:f0a5ac682e5e"
+  ]
+}

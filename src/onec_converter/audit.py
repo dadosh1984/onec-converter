@@ -8,6 +8,12 @@ load/clone), объект, GUID приёмника (если есть), прав
 
 Идея: oscript-library/logos (log4j-стиль), cpr1c/logosFor1c (сквозное
 логирование). Код авторский.
+
+Формула hash-цепочки (tamper-evident, Фаза 37):
+  hash  = SHA-256( JSON(dict(record) без ключа 'hash', sort_keys=True) )
+  prev_hash(записи) = hash предыдущей записи; для первой записи файла — ''
+  (или hash последней записи архива .1 при ротации, см. маркер 'rotated').
+Порядок: sort_keys=True, ensure_ascii=False, сериализация Python json.
 """
 from __future__ import annotations
 
@@ -17,20 +23,33 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
+from .crypto_utils import sha256_hex
+
 LEVELS = ('INFO', 'WARN', 'ERROR')
 _active: AuditLog | None = None
 
+# кеш последнего хеша по (путь, mtime, size): повторные открытия того же
+# файла не перечитывают его целиком (50 МБ — заметное разовое чтение)
+_last_hash_cache: dict[tuple[str, int, int], str] = {}
+
 
 def _sha256(s: str) -> str:
-    import hashlib
-
-    return hashlib.sha256(s.encode('utf-8')).hexdigest()
+    return sha256_hex(s)
 
 
 def _last_record_hash(path: Path) -> str:
-    """Hash последней записи JSONL (для продолжения цепочки при перезапуске)."""
+    """Hash последней записи JSONL (для продолжения цепочки при перезапуске).
+
+    Кешируется по (путь, mtime_ns, size) — повторные открытия без изменений
+    файла не перечитывают его целиком.
+    """
     if not path.is_file():
         return ''
+    st = path.stat()
+    key = (str(path), st.st_mtime_ns, st.st_size)
+    cached = _last_hash_cache.get(key)
+    if cached is not None:
+        return cached
     last = ''
     with open(path, encoding='utf-8') as f:
         for line in f:
@@ -43,17 +62,25 @@ def _last_record_hash(path: Path) -> str:
         rec = json.loads(last)
     except json.JSONDecodeError:
         return ''
-    return str(rec.get('hash', ''))
+    result = str(rec.get('hash', ''))
+    if len(_last_hash_cache) > 128:  # bounded: старые записи не копятся
+        _last_hash_cache.clear()
+    _last_hash_cache[key] = result
+    return result
 
 
-def verify_audit(path: str | Path) -> list[dict[str, str]]:
-    """Проверка целостности JSONL-журнала (tamper-evident, Фаза 37).
+def _verify_file(path: Path, errors: list[dict[str, str]], *,
+                 tag: str = '', expect_boundary: str | None = None) -> str:
+    """Проверить цепочку внутри одного файла; вернуть hash последней записи.
 
-    Пересчитывает hash-цепочку и возвращает список нарушений (пусто = ок).
+    expect_boundary is None — правило первой записи (маркер ротации или
+    пустой prev_hash). Не None (cross-file) — первая запись обязана иметь
+    prev_hash == expect_boundary (хвост предыдущего файла).
     """
-    errors: list[dict[str, str]] = []
+    prefix = f'{tag}:' if tag else ''
     prev = ''
     first = True
+    last_hash = ''
     with open(path, encoding='utf-8') as f:
         for n, line in enumerate(f, 1):
             line = line.strip()
@@ -62,7 +89,7 @@ def verify_audit(path: str | Path) -> list[dict[str, str]]:
             try:
                 rec = json.loads(line)
             except json.JSONDecodeError as exc:
-                errors.append({'line': str(n), 'error': f'не JSON: {exc}'})
+                errors.append({'line': f'{prefix}{n}', 'error': f'не JSON: {exc}'})
                 continue
             got_prev = rec.get('prev_hash', '')
             got_hash = rec.get('hash', '')
@@ -70,19 +97,47 @@ def verify_audit(path: str | Path) -> list[dict[str, str]]:
             body.pop('hash', None)
             expect = _sha256(json.dumps(body, sort_keys=True, ensure_ascii=False))
             if got_hash and got_hash != expect:
-                errors.append({'line': str(n), 'error': 'подменён hash записи'})
+                errors.append({'line': f'{prefix}{n}', 'error': 'подменён hash записи'})
             if first:
                 first = False
-                if rec.get('marker') != 'rotated' and got_prev:
+                if expect_boundary is not None:
+                    if got_prev != expect_boundary:
+                        errors.append({'line': f'{prefix}{n}', 'error': 'граница файла: '
+                                       f'prev_hash {got_prev!r} != хеш последней записи '
+                                       f'предыдущего файла {expect_boundary!r}'})
+                elif rec.get('marker') != 'rotated' and got_prev:
                     # файл без предыстории (маркера ротации нет): корень
                     # цепочки обязан быть пустым, иначе prev_hash подделан
-                    errors.append({'line': str(n), 'error': 'первая запись '
+                    errors.append({'line': f'{prefix}{n}', 'error': 'первая запись '
                                    'файла не должна иметь prev_hash '
                                    '(файл без предыстории)'})
             elif prev and got_prev != prev:
-                errors.append({'line': str(n),
+                errors.append({'line': f'{prefix}{n}',
                                'error': f'prev_hash не совпадает ({got_prev!r} != {prev!r})'})
             prev = got_hash or expect
+            last_hash = prev
+    return last_hash
+
+
+def verify_audit(path: str | Path, cross_files: bool = False) -> list[dict[str, str]]:
+    """Проверка целостности JSONL-журнала (tamper-evident, Фаза 37).
+
+    Пересчитывает hash-цепочку и возвращает список нарушений (пусто = ок).
+    cross_files=True — дополнительно сверяет границы с архивами ротации
+    (audit.jsonl.1, .2, ...): первая запись каждого следующего файла обязана
+    иметь prev_hash == хеш последней записи предыдущего (Фаза 42).
+    """
+    errors: list[dict[str, str]] = []
+    path = Path(path)
+    files: list[Path] = [path]
+    if cross_files:
+        archives = sorted(path.parent.glob(path.name + '.*'),
+                          key=lambda p: p.suffix)
+        files = archives + [path]
+    last = ''
+    for i, f in enumerate(files):
+        last = _verify_file(f, errors, tag=f.name,
+                            expect_boundary=last if i > 0 else None)
     return errors
 
 
@@ -99,7 +154,7 @@ class AuditLog:
     def __init__(self, path: str | Path | None = None,
                  max_bytes: int = 50 * 1024 * 1024,
                  file_flush: int = 1,
-                 pii_masking: bool = False) -> None:
+                 pii_masking: bool = True) -> None:
         self._path = Path(path) if path else None
         self._max_bytes = max_bytes
         self._fh: TextIO | None = None
@@ -217,8 +272,13 @@ def _redact(s: str) -> str:
     return ''.join(out)
 
 
-def set_audit(path: str | Path | None, pii_masking: bool = False) -> None:
-    """Активировать файловый журнал (None — сброс к in-memory)."""
+def set_audit(path: str | Path | None, pii_masking: bool = True) -> None:
+    """Активировать файловый журнал (None — сброс к in-memory).
+
+    pii_masking по умолчанию True (opt-out): журнал позиционируется как
+    «пригодный для ПДн-аудита», поэтому ПДн маскируются всегда, кроме явно
+    отключённого случая.
+    """
     global _active
     if _active is not None:
         _active.close()

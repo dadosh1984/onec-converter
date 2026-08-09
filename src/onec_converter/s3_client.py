@@ -12,11 +12,11 @@ payload hash) + string-to-sign (AWS4-HMAC-SHA256, дата, scope) + HMAC-цеп
 from __future__ import annotations
 
 import datetime
-import hashlib
-import hmac
 import os
 import urllib.request
 from typing import Any
+
+from .crypto_utils import hmac_sha256, sha256_hex
 
 _ISO = '%Y%m%dT%H%M%SZ'
 _DAY = '%Y%m%d'
@@ -27,11 +27,11 @@ class S3Error(Exception):
 
 
 def _hmac(key: bytes, msg: bytes) -> bytes:
-    return hmac.new(key, msg, hashlib.sha256).digest()
+    return hmac_sha256(key, msg)
 
 
 def _sha256_hex(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+    return sha256_hex(data)
 
 
 def sign_v4(access_key: str, secret_key: str, *, method: str, path: str,
@@ -66,8 +66,7 @@ def sign_v4(access_key: str, secret_key: str, *, method: str, path: str,
     k_region = _hmac(k_date, region.encode())
     k_service = _hmac(k_region, service.encode())
     k_signing = _hmac(k_service, b'aws4_request')
-    signature = hmac.new(k_signing, string_to_sign.encode(),
-                         hashlib.sha256).hexdigest()
+    signature = hmac_sha256(k_signing, string_to_sign).hex()
 
     authorization = (
         f'AWS4-HMAC-SHA256 Credential={access_key}/{scope}, '
