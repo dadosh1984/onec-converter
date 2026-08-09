@@ -30,10 +30,17 @@ def _b64url_decode(s: str) -> bytes:
 
 
 def mint_jwt(secret: str, issuer: str, ttl_seconds: int,
-             now: float | None = None, extra: dict[str, Any] | None = None) -> str:
-    """Создаёт JWT HS256 (issuer, iat, exp); extra — доп. поля payload."""
+             now: float | None = None, extra: dict[str, Any] | None = None,
+             kid: str | None = None) -> str:
+    """Создаёт JWT HS256 (issuer, iat, exp); extra — доп. поля payload.
+
+    kid (U30): идентификатор ключа для ротации — попадает в header
+    (проверяется приёмником, поддерживающим несколько секретов).
+    """
     now = now if now is not None else time.time()
-    header = {'alg': ALG, 'typ': 'JWT'}
+    header: dict[str, Any] = {'alg': ALG, 'typ': 'JWT'}
+    if kid:
+        header['kid'] = kid
     payload: dict[str, Any] = {'iss': issuer, 'iat': int(now),
                                'exp': int(now) + ttl_seconds}
     if extra:
@@ -42,6 +49,52 @@ def mint_jwt(secret: str, issuer: str, ttl_seconds: int,
                + '.' + _b64url_encode(json.dumps(payload, separators=(',', ':')).encode()))
     sig = hmac.new(secret.encode(), signing.encode(), hashlib.sha256).digest()
     return f'{signing}.{_b64url_encode(sig)}'
+
+
+def verify_jwt_kid(token: str, secrets: dict[str, str], issuer: str,
+                   now: float | None = None) -> dict[str, Any]:
+    """Проверка JWT с ротацией ключей (U30).
+
+    secrets: kid -> секрет (текущий + предыдущие для плавной ротации).
+    Если заголовок содержит kid — подпись проверяется ТОЛЬКО этим секретом
+    (жёстко); если kid нет — пробуются все секреты (обратная совместимость).
+    """
+    now = now if now is not None else time.time()
+    parts = token.split('.')
+    if len(parts) != 3:
+        raise JwtError('неверная структура токена')
+    header_part, payload_part, sig_part = parts
+    try:
+        header = json.loads(_b64url_decode(header_part))
+        payload = json.loads(_b64url_decode(payload_part))
+        sig = _b64url_decode(sig_part)
+    except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise JwtError('невалидная кодировка') from exc
+    if header.get('alg') != ALG:
+        raise JwtError('неподдерживаемый алгоритм')
+
+    kid = header.get('kid')
+    candidates = ([secrets[kid]] if kid in secrets
+                  else list(secrets.values()) if kid is None
+                  else [])
+    if not candidates:
+        raise JwtError('нет секрета для kid' if kid else 'нет секретов')
+    ok = False
+    for secret in candidates:
+        expected = hmac.new(secret.encode(),
+                            f'{header_part}.{payload_part}'.encode(),
+                            hashlib.sha256).digest()
+        if hmac.compare_digest(expected, sig):
+            ok = True
+            break
+    if not ok:
+        raise JwtError('неверная подпись')
+    exp = payload.get('exp')
+    if isinstance(exp, (int, float)) and now > exp:
+        raise JwtError('токен истёк')
+    if payload.get('iss') != issuer:
+        raise JwtError('неверный issuer')
+    return dict(payload)
 
 
 def verify_jwt(token: str, secret: str, issuer: str,

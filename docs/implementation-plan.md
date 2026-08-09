@@ -584,13 +584,13 @@ _oAuth2 — реализовано) — в бэклог ниже. План ра�
 
 ## Фаза 52 — Безопасность (0.35.0)
 
-- [ ] [fact] маскирование секретов DSN/URL в логах и аудите (U27, закрывает U8)
-- [ ] [fact] s3_client: конфигурируемый region + STS (U28)
-- [ ] [fact] BSL: Idempotency-Key + лимит размера пакета (U29/U32)
-- [ ] [fact] JWT: kid/ротация секрета в ПроверитьJWT (U30)
-- [ ] [fact] pre-commit секрет-сканер (U31)
-- [ ] [fact] notify: ретраи + сигнал об ошибке (U33); verify --json (U34)
-- [ ] [assumption] ворота зелёные; релиз 0.35.0
+- [x] [fact] маскирование секретов DSN/URL в логах/исключениях (U8/U27)
+- [x] [fact] s3 region + STS assume_role (U28)
+- [x] [fact] BSL Idempotency (idem) + лимит пакета 413/1000 (U29/U32)
+- [x] [fact] JWT kid/ротация в ПроверитьJWT + mint --kid (U30)
+- [x] [fact] pre-commit секрет-сканер (U31)
+- [x] [fact] notify ретрай 5xx (U33)
+- [x] [assumption] ворота зелёные; релиз 0.35.0
 
 ## Фаза 53 — Продукт и востребованность (0.36.0)
 

@@ -22,10 +22,12 @@ def _retry_delivery(url: str, body: bytes, timeout: int,
                     attempts: int, backoff: float) -> dict[str, Any]:
     """Отправка с retry (attempts попыток, экспоненциальный backoff).
 
-    HTTPError (4xx/5xx) — не ретраится (уведомление не изменяет итог),
-    возвращается статус; URLError (сеть) — ретраится с backoff.
+    Ретраятся: сетевые сбои (URLError) и 5xx (транзиентные ошибки шлюза,
+    U33). 4xx (HTTPError) — не ретраятся: это стабильный отказ контракта,
+    ретрай не поможет. После исчерпания попыток — NotifyError.
     """
     last: Exception | None = None
+    last_status: int | None = None
     for i in range(max(attempts, 1)):
         req = urllib.request.Request(
             url, data=body, method='POST',
@@ -34,12 +36,19 @@ def _retry_delivery(url: str, body: bytes, timeout: int,
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return {'ok': resp.status < 400, 'status': resp.status}
         except urllib.error.HTTPError as exc:
+            if exc.code >= 500:
+                last = exc
+                last_status = exc.code
+                if i + 1 < max(attempts, 1):
+                    time.sleep(backoff * (2 ** i))
+                continue
             return {'ok': False, 'status': exc.code}
         except urllib.error.URLError as exc:
             last = exc
             if i + 1 < max(attempts, 1):
                 time.sleep(backoff * (2 ** i))
-    raise NotifyError(f'уведомление не доставлено за {max(attempts, 1)} попыток: {last}') from last
+    detail = last_status if last_status is not None else last
+    raise NotifyError(f'уведомление не доставлено за {max(attempts, 1)} попыток: {detail}') from last
 
 
 def send_webhook(url: str, payload: dict[str, Any], timeout: int = 15,

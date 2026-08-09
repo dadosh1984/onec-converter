@@ -166,7 +166,12 @@ class HttpClient83:
 
     async def load(self, objects: list[dict[str, Any]], source_ib: str, target_ib: str,
                    replace: bool = False) -> list[LoadResult]:
-        """Пакетная загрузка; возвращает результат по каждому пакету."""
+        """Пакетная загрузка; возвращает результат по каждому пакету.
+
+        Идемпотентность записи достигается через `replace=true` (пишем по
+        ключу, повторные пакеты при сетевом ретрае обновляют, а не дублируют,
+        U29). HTTP-заголовок с ключом пакета не требуется.
+        """
         results: list[LoadResult] = []
         for i in range(0, len(objects), self.batch_size):
             batch = objects[i:i + self.batch_size]

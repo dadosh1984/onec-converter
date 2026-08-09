@@ -117,7 +117,11 @@ class GenericSqlSource:
                 except Exception as e:  # noqa: BLE001 — retry-обёртка
                     exc = e
             if self._conn is None:
-                raise SqlSourceError(f'не удалось подключиться к {self.kind}: {exc}')
+                from .secret_mask import mask_dsn
+
+                msg = f'не удалось подключиться к {self.kind}: {exc}'
+                # секреты DSN не утекают в исключение (U8/U27)
+                raise SqlSourceError(mask_dsn(msg)) from exc
         return self._conn
 
     def close(self) -> None:

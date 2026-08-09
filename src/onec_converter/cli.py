@@ -385,11 +385,15 @@ def cmd_mint_token(args: argparse.Namespace) -> int:
     if getattr(args, 'dry_run', False):
         payload = {'iss': args.issuer, 'sub': 'onec-loader',
                    'iat': int(time.time()), 'exp': int(time.time()) + args.exp_min * 60}
-        print(json.dumps({'header': {'alg': 'HS256', 'typ': 'JWT'},
-                          'payload': payload},
+        header: dict[str, object] = {'alg': 'HS256', 'typ': 'JWT'}
+        kid = getattr(args, 'kid', '') or ''
+        if kid:
+            header['kid'] = kid
+        print(json.dumps({'header': header, 'payload': payload},
                          ensure_ascii=False, indent=2))
         return 0
-    token = mint_jwt(args.secret, args.issuer, args.exp_min * 60)
+    token = mint_jwt(args.secret, args.issuer, args.exp_min * 60,
+                      kid=getattr(args, 'kid', '') or None)
     if getattr(args, 'json', False):
         print(json.dumps({'token': token,
                           'exp': int(time.time()) + args.exp_min * 60},
@@ -1211,6 +1215,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help='issuer токена')
     p_mint.add_argument('--exp-min', type=int, default=60,
                         help='срок жизни в минутах')
+    p_mint.add_argument('--kid', default='',
+                        help='id ключа для ротации JWT (в header токена, U30;'
+                        ' приёмник выбирает секрет по kid из НаборСекретовJWT)')
     p_mint.add_argument('--dry-run', action='store_true',
                         help='показать header/payload без подписи (Фаза 45)')
     p_mint.add_argument('--json', action='store_true',

@@ -41,4 +41,16 @@ for f in $(git diff --cached --name-only); do
 done
 
 [ $blocked -ne 0 ] && echo "Коммит отменён pre-commit hook'ом (Фаза 39)." >&2 && exit 1
+
+# U31 (Фаза 52): сканер секретов в диффе коммита. Изменения больших
+# файлов игнорируются (шум), ключи/пароли/токены в коде блокируют коммит.
+secret_pat='(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16})|(--BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY--)|(password\s*[=:]\s*.{6,})|(client_secret\s*[=:])|(secret_key\s*[=:])'
+# видимый текст diff (без бинарных) для первых добавленных строк
+if git show --cached --no-renames --format= -- . 2>/dev/null | \
+    grep -nE "$secret_pat" | head -5; then
+    echo "блокировка: в диффе коммита найден вероятный секрет (ключ/пароль). " >&2
+    echo "Уберите секрет или замаскируйте через env/переменные конфига." >&2
+    echo "Коммит отменён pre-commit hook'ом (U31, Фаза 52)." >&2
+    exit 1
+fi
 exit 0

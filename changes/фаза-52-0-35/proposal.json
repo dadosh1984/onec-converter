@@ -1,0 +1,16 @@
+{
+  "title": "фаза-52-0-35",
+  "goal": "Фаза 52 (0.35.0) — Безопасность (раунд 5): (1) secret_mask.py — маскирование DSN/URL секретов, sql_source маскирует исключения (U8/U27); (2) s3 assume_role STS (U28); (3) BSL лимит пакета 413/1000 + идемпотентность по idem, client replace=true для сетевых ретраев (U29/U32); (4) JWT kid/ротация — mint_jwt(kid), verify_jwt_kid, CLI mint-token --kid, BSL НаборСекретовJWT (U30); (5) pre-commit секрет-сканер (U31); (6) notify ретрай 5xx + сетевые (U33). Тесты +11 в tests/test_phase52_security.py. Ворота: mypy 54, check_bsl ок. CHANGELOG 0.35.0, план ✅, релиз.",
+  "platform": "тесты в E:\\tmp; версия 0.35.0",
+  "constraints": "compact",
+  "budget": "compact",
+  "clarity": "vague",
+  "language": "ru",
+  "appliesLessons": [
+    "фазу-23-conformance-тесты:forge:753265ca3073",
+    "фазу-25-audit-логирование:forge:7c216dc57da7",
+    "фазу-24-полный-сценарий:forge:1b6dbaa2498b",
+    "фаза-47-0-30:forge:c905acc2ec25",
+    "фаза-35-0-18:forge:22cbebde6269"
+  ]
+}

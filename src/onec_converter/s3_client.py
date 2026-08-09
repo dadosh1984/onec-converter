@@ -301,3 +301,58 @@ def multipart_upload(bucket: str, key: str, data: bytes, *,
                 pass
     return {'ok': True, 'url': base, 'key': key, 'parts': len(etags),
             'upload_id': upload_id}
+
+
+def assume_role(role_arn: str, session_name: str, *,
+                access_key: str = '', secret_key: str = '',
+                region: str = 'us-east-1',
+                duration_seconds: int = 3600,
+                external_id: str = '') -> dict[str, str]:
+    """Получить временные ключи через AWS STS AssumeRole (U28).
+
+    Возвращает {'AccessKeyId', 'SecretAccessKey', 'SessionToken',
+    'Expiration'}. Реализация — подписанный SigV4 POST к sts.amazonaws.com
+    (GetCallerIdentity-подобный путь), без boto3. Авторский код.
+    """
+    import urllib.parse
+    import urllib.request
+    import xml.etree.ElementTree as ET
+
+    ak = access_key or os.environ.get('AWS_ACCESS_KEY_ID', '')
+    sk = secret_key or os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+    if not ak or not sk:
+        raise S3Error('STS: нет ключей (передайте --key/--secret или AWS_*)')
+
+    params = [('Action', 'AssumeRole'),
+              ('Version', '2011-06-15'),
+              ('RoleArn', role_arn),
+              ('RoleSessionName', session_name),
+              ('DurationSeconds', str(duration_seconds))]
+    if external_id:
+        params.append(('ExternalId', external_id))
+    q = urllib.parse.urlencode(params)
+    url = f'https://sts.amazonaws.com/?{q}'
+    host = 'sts.amazonaws.com'
+    path = '/'
+    authorization, amz_date, _ = sign_v4(
+        ak, sk, method='POST', path=path, host=host,
+        payload=q.encode(), region=region, service='sts')
+    hdrs = {'Host': host, 'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Length': str(len(q)), 'x-amz-date': amz_date,
+            'Authorization': authorization}
+    req = urllib.request.Request(url, data=q.encode(), method='POST',
+                                 headers=hdrs)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            xml_body = resp.read().decode('utf-8')
+    except urllib.error.URLError as exc:
+        raise S3Error(f'STS AssumeRole не удался: {exc}') from exc
+    root = ET.fromstring(xml_body)
+    ns = {'sts': 'https://sts.amazonaws.com/doc/2011-06-15/'}
+    creds = root.find('.//sts:Credentials', ns)
+    if creds is None:
+        err = root.find('.//sts:Error/Code', ns)
+        raise S3Error(f'STS: ошибка AssumeRole: {err.text if err is not None else "неизвестно"}')
+    d: dict[str, str] = {child.tag.split('}')[-1]: (child.text or '')
+                          for child in creds}
+    return d
