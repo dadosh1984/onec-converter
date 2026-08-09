@@ -329,6 +329,79 @@ JWT-разрыв, openapi, check_bsl в gates). Устарело из раунд
 - [x] [fact] examples/: autonomous_migration + context_compressor
 - [x] [assumption] ворота зелёные; релиз 0.23.0
 
+# Фазы 41+ — план по итогам раунда 4 внешнего анализа v0.23.0 (проверено, август 2026)
+
+## Фаза 41 — Хирургические дефекты раунда 4 (0.24.0)
+
+- [ ] [fact] gen_openapi.py: версия из onec_converter.__version__ (не литерал)
+- [ ] [fact] gen_openapi.py: BearerAuth для /metadata и /load (везде, где ПроверитьКлюч)
+- [ ] [fact] audit._rotate(): маркер-запись {"marker":"rotated","prev_hash":...} первой строкой
+- [ ] [fact] verify_audit(): валидация prev_hash первой записи (пуст для файла без предыстории)
+- [ ] [fact] sql_source: whitelist-валидация table в fetch_rows + параметризация; скобки в WHERE MSSQL
+- [ ] [fact] тесты: openapi version==__version__; golden-тест ротации; verify_audit сценарий «ротация→первая запись»; sql-инъекция
+- [ ] [assumption] ворота зелёные; релиз 0.24.0
+
+## Фаза 42 — Укрепление аудита/комплаенс (0.25.0)
+
+- [ ] [fact] verify_audit(cross_files=True): сверка цепочки audit.jsonl + .1 + ...
+- [ ] [fact] _last_record_hash: кеш при открытии (не читать весь файл каждый раз)
+- [ ] [fact] pii_masking=True по умолчанию (opt-out) + changelog-запись о разнице
+- [ ] [fact] crypto_utils.py: общий sha256/hex/hmac (audit, s3_client, anonymizer)
+- [ ] [fact] hypothesis: мутация байта в случайной записи ВСЕГДА детектируется verify_audit
+- [ ] [fact] CLI audit-verify --audit-file; доки: формула hash/prev_hash
+- [ ] [assumption] ворота зелёные; релиз 0.25.0
+
+## Фаза 43 — SQL-источники до production-grade (0.26.0)
+
+- [ ] [fact] _connect(): connect_timeout (не зависать на недоступном сервере)
+- [ ] [fact] fetch_rows(): потоковая выборка (fetchmany/server-side cursor) вместо fetchall
+- [ ] [fact] README «SQL-источники: ограничения» + honest contract в docs/openapi.yaml
+- [ ] [fact] интеграционный тест PostgreSQL в Docker (реальная СУБД) в CI
+- [ ] [fact] col_sql fetch_metadata: скобки/экранирование (AND/OR приоритет)
+- [ ] [assumption] ворота зелёные; релиз 0.26.0
+
+## Фаза 44 — Покрытие и качество (0.27.0)
+
+- [ ] [fact] COVERAGE_MODULES в pyproject.toml; расширить на audit/clone_db/health/s3_client/sql_source/ai_skills
+- [ ] [fact] mypy --strict на scripts/ (gen_openapi, gates-хелперы)
+- [ ] [fact] решение по mypy tests/ задокументировано (README/RELEASING)
+- [ ] [fact] PII_PROFILES: профиль Узбекистан (ИНН/ПИНФЛ) + тесты
+- [ ] [fact] gates.sh: тайминг прогона + предупреждение при превышении лимита
+- [ ] [fact] check_bsl: тест на несколько .bsl-файлов
+- [ ] [assumption] ворота зелёные; релиз 0.27.0
+
+## Фаза 45 — AI-навыки: глубина и CLI (0.28.0)
+
+- [ ] [fact] compress_metadata: опция сохранения саммари в файл
+- [ ] [fact] auto_map_schemas: confidence (exact/synonym) в выводе
+- [ ] [fact] CLI ai-map / ai-explain (обёртки над MCP-тулами)
+- [ ] [fact] mint-token --dry-run (payload до подписи) и --json
+- [ ] [fact] Module.bsl ПроверитьКлюч: задержка/блок после N неудач (rate-limit)
+- [ ] [fact] тесты: CLI ai-map/ai-explain, mint-token --json, rate-limit в BSL
+- [ ] [assumption] ворота зелёные; релиз 0.28.0
+
+## Фаза 46 — Продукт и документация (0.29.0)
+
+- [ ] [fact] README: «tamper-evident audit log» для комплаенс-аудитории
+- [ ] [fact] README: feature matrix (7.7 / файловая 8.x / SQL 8.x)
+- [ ] [fact] README/PyPI: живой пример диалога Claude/Cursor (auto_map/explain_diff)
+- [ ] [fact] extension_83/README.md: Совпадает()/constant-time описание
+- [ ] [fact] base_health: errors заполняется диагностикой (не всегда [])
+- [ ] [fact] notify.telegram_url: urllib.parse.quote(chat_id)
+- [ ] [fact] clone_db: прогресс-логирование через progress.py для больших файлов
+- [ ] [fact] docs/recipes: полный цикл clone-db→load→verify→audit→verify_audit
+- [ ] [assumption] ворота зелёные; релиз 0.29.0
+
+## Фаза 47 — Архитектурные хвосты (0.30.0)
+
+- [ ] [fact] OnecConverterError — базовый класс исключений (audit/clone/sql/health наследуют)
+- [ ] [fact] http_client._ensure_token: лимит попыток OAuth2-обновления (защита от зацикливания)
+- [ ] [fact] cache.py: потокобезопасность (threading.Lock) + concurrent-тест
+- [ ] [fact] read_metadata: понятная ошибка на битых файлах (контекст + путь)
+- [ ] [fact] _blob_cache: лимит/эвикция при открытии базы
+- [ ] [fact] CHANGELOG: секция Security для фиксов фаз 41-43
+- [ ] [assumption] ворота зелёные; релиз 0.30.0
+
 ## Бэклог (опционально, по востребованности)
 
 - [ ] [spike] Rust-ядро (PyO3) для FAT-цепей/zlib/NVC — ускорение 10-20x
