@@ -37,6 +37,67 @@ def classify_objects(meta: dict[str, Any]) -> dict[str, str]:
     return result
 
 
+
+def _attr_key(a: dict[str, Any]) -> tuple[str, Any, Any]:
+    """Ключ реквизита для сравнения: (имя, тип, длина)."""
+    return (a.get('name', ''), a.get('type', ''), a.get('length', 0))
+
+
+def compare_user_metadata(source_meta: dict[str, Any],
+                          target_meta: dict[str, Any]) -> dict[str, Any]:
+    """Сравнить структуру user-объектов источника и приёмника (шаги 5-6).
+
+    Для каждого user-объекта (по classify_objects) сверяются: наличие
+    объекта и его таблицы в приёмнике, состав реквизитов (имя+тип+длина),
+    присутствие VT-таблиц (табличные части документов). Возвращает
+    {'ok': [fullname...], 'conflict': [{'name', 'kind', 'diff': [...]}]}.
+    """
+    srcs = {o['kind'] + '.' + o['name']: o
+            for o in source_meta.get('objects', [])}
+    tgts = {o['kind'] + '.' + o['name']: o
+            for o in target_meta.get('objects', [])}
+    src_tables = set(source_meta.get('tables', []))
+    tgt_tables = set(target_meta.get('tables', []))
+
+    ok: list[str] = []
+    conflict: list[dict[str, Any]] = []
+    for full, category in classify_objects(source_meta).items():
+        if category != 'user' or full.split('.', 1)[0] not in {'Справочник',
+                                                               'РегистрСведений',
+                                                               'Документ'}:
+            continue
+        obj = srcs[full]
+        diff: list[str] = []
+        tgt = tgts.get(full)
+        if tgt is None:
+            diff.append('нет объекта в приёмнике')
+        else:
+            base = obj.get('table', '')
+            if tgt.get('table') != base:
+                diff.append(f'таблица различается: {base!r} vs {tgt.get("table")!r}')
+            elif base:
+                if base not in tgt_tables:
+                    diff.append(f'нет таблицы {base!r} в приёмнике')
+                src_attrs = {_attr_key(a) for a in (obj.get('attributes') or [])}
+                tgt_attrs = {_attr_key(a) for a in (tgt.get('attributes') or [])}
+                only_src = {k[0] for k in src_attrs - tgt_attrs if k[2]}
+                only_tgt = {k[0] for k in tgt_attrs - src_attrs if k[2]}
+                if only_src:
+                    diff.append(f'реквизиты только в источнике: {sorted(only_src)[:6]}')
+                if only_tgt:
+                    diff.append(f'реквизиты только в приёмнике: {sorted(only_tgt)[:6]}')
+            # VT-таблицы документа (табличные части)
+            for vt in sorted(t for t in src_tables if t.startswith(f'{base}_VT')):
+                if vt not in tgt_tables:
+                    diff.append(f'нет табличной части {vt!r} в приёмнике')
+        if diff:
+            conflict.append({'name': full, 'kind': obj.get('kind', ''),
+                             'diff': diff})
+        else:
+            ok.append(full)
+    return {'ok': sorted(ok), 'conflict': conflict}
+
+
 def build_plan(meta: dict[str, Any]) -> list[dict[str, str]]:
     """План переноса: только user-объекты, каждый в отдельный файл моста.
 

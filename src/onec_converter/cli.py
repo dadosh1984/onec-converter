@@ -790,7 +790,19 @@ def cmd_bridge_import(args: argparse.Namespace) -> int:
 def cmd_bridge_migrate(args: argparse.Namespace) -> int:
     """Перенос user-данных: копия приёмника → план → мосты по разделам
     → загрузка + обратный тест (по одному файлу, цикл до совпадения)."""
+    from .classify import compare_user_metadata
+    from .source_8x_file import read_metadata
     from .user_data_migrate import MigrateError, run_migration
+
+    if getattr(args, 'meta_conflicts', False):
+        try:
+            src_md = read_metadata(Path(args.source_dir) / '1Cv8.1CD')
+            tgt_md = read_metadata(Path(args.target_dir) / '1Cv8.1CD')
+            mcmp = compare_user_metadata(src_md, tgt_md)
+        except (OSError, ValueError) as exc:
+            return _err(str(exc))
+        print(json.dumps(mcmp, ensure_ascii=False, indent=2, default=str))
+        return 0 if not mcmp['conflict'] else 1
 
     try:
         rep = run_migration(
@@ -1766,6 +1778,8 @@ def build_parser() -> argparse.ArgumentParser:
                                   help='служебные колонки через запятую, исключаемые из сравнения (_VERSION,_MARKED)')
     p_bridge_migrate.add_argument('--pilot-rows', type=int, default=3,
                                   help='пилотный прогон: сколько строк загрузить и сверить до полного переноса (0 — без пилота)')
+    p_bridge_migrate.add_argument('--meta-conflicts', action='store_true',
+                                  help='только показать расхождения структуры user-объектов источника и приёмника, без переноса')
 
     p_xlsx = sub.add_parser('export-xlsx',
                             help='Первые N строк таблицы 1CD в XLSX (Фаза 53 U11)')

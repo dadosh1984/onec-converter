@@ -123,6 +123,15 @@ def run_migration(source_dir: str | Path, target_dir: str | Path,
 
     md = meta if meta is not None else read_metadata(src / '1Cv8.1CD')
     plan = build_plan(md)
+
+    # шаги 5-6: сравнение структуры user-объектов с приёмником; конфликтные
+    # разделы исключаются из плана и попадают в мета-отчёт
+    target_md = read_metadata(target_copy / '1Cv8.1CD')
+    from .classify import compare_user_metadata
+    mcmp = compare_user_metadata(md, target_md)
+    conflicts = {c['name'] for c in mcmp['conflict']}
+    plan = [p for p in plan if p['name'] not in conflicts]
+
     if objects:
         wanted = {o.strip() for o in objects.split(',')}
         plan = [p for p in plan if p['name'] in wanted]
@@ -140,4 +149,5 @@ def run_migration(source_dir: str | Path, target_dir: str | Path,
     ok = all(r.get('ok') for r in results.values())
     return {'ok': ok, 'source': str(src), 'target_copy': str(target_copy),
             'plan': plan, 'exported': len(files),
+            'meta_conflicts': mcmp['conflict'],
             'sections': results}
