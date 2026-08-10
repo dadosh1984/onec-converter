@@ -6,11 +6,15 @@
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from .fake_1cd import enc_datetime, enc_nc, enc_numeric, enc_nvc
 from .source_8x_file import Database1CD, decode_nc, decode_nvc
+
+_GUID_RE = re.compile(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
 
 ZERO16 = b'\x00' * 16
 
@@ -75,6 +79,8 @@ def _encode_field(row: bytearray, fd: Any, value: Any) -> None:
         raw = enc_datetime(str(value))
     elif ft in ('B', 'RV') and isinstance(value, bytes) and len(value) == 16:
         raw = value
+    elif ft in ('B', 'RV') and isinstance(value, str) and _GUID_RE.match(value):
+        raw = bytes.fromhex(value.replace('-', ''))
     if raw is not None:
         row[fd.offset:fd.offset + len(raw)] = raw
 

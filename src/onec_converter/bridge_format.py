@@ -89,6 +89,20 @@ class BridgeConfig:
     after_add_row: str = ''
 
 
+_XLSX_BAD = dict.fromkeys(list(range(32)) + [0x7F])
+
+
+def _xlsx_clean(v: Any) -> Any:
+    """Убрать из строки символы, запрещённые openpyxl: control chars + суррогаты.
+    Бинарные значения (bytes) в xlsx не выгружаются -> None."""
+    if isinstance(v, bytes):
+        return None
+    if isinstance(v, str) and v:
+        return v.translate(_XLSX_BAD).encode('utf-16-be', 'surrogatepass')\
+            .decode('utf-16-be', 'ignore')
+    return v
+
+
 def write_bridge(path: str | Path, cfg: BridgeConfig,
                  data_rows: list[list[Any]]) -> None:
     """Запись xlsx-моста: лист «Настройки» + лист «Данные»."""
@@ -142,12 +156,12 @@ def write_bridge(path: str | Path, cfg: BridgeConfig,
             out_row: list[Any] = [None] * width
             for c, v in zip(cfg.columns, row):
                 if c.col_num:
-                    out_row[c.col_num - 1] = v
+                    out_row[c.col_num - 1] = _xlsx_clean(v)
             dsheet.append(out_row)
     else:
         dsheet.append([c.attr for c in cfg.columns])
         for row in data_rows:
-            dsheet.append(list(row))
+            dsheet.append([_xlsx_clean(v) for v in row])
 
     out_path = Path(path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

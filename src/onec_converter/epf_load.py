@@ -71,7 +71,8 @@ def import_bridge(bridge_path: str | Path, target_dir: str | Path,
 
     md = read_metadata(work)
     objects = {f"{o['kind']}.{o['name']}": o for o in md.get('objects', [])}
-    meta = objects.get(cfg.obj_fullname)
+    obj_name, vt_name = _split_owner(cfg.obj_fullname)
+    meta = objects.get(obj_name)
     if meta is None:
         raise BridgeError(f'нет объекта приёмника {cfg.obj_fullname!r} '
                           f'в метаданных')
@@ -94,14 +95,13 @@ def import_bridge(bridge_path: str | Path, target_dir: str | Path,
         # режим 2: позиционный индекс измерений
         if cfg.mode in (MODE_CATALOG, MODE_TABLE):
             for c in search_cols:
-                lookup.build_field(db, cfg.obj_fullname, table_name,
+                lookup.build_field(db, obj_name, table_name,
                                    ru_phys, c.attr)
             prefix = _table_prefix(db, t, idr)
             counter = _max_counter(db, t, idr) if idr else 0
         else:
             reg_index = _register_index(db, t, ru_phys, search_cols)
             counter = 0
-        vt_cache: dict[str, Any] = {}
         vt_lines: dict[bytes, int] = {}  # владелец -> след. номер строки (для ТЧ)
         owner_cache: dict[tuple[str, ...], bytes] = {}
         enum_cache: dict[str, EnumResolver] = {}
@@ -137,10 +137,11 @@ def import_bridge(bridge_path: str | Path, target_dir: str | Path,
                         created += 1
                         created_here = True
                 elif cfg.mode == MODE_TABLE:
+                    vt = _vt_for(db, t, {}, vt_name)
                     created_owner = _load_tabular(
-                        work, db, t, lookup, cfg.obj_fullname, fm_by_name,
+                        work, db, t, vt, lookup, obj_name, fm_by_name,
                         phys_ru, search_cols, cfg.columns,
-                        values, vt_cache, vt_lines, owner_cache, cfg.no_new)
+                        values, vt_lines, owner_cache, cfg.no_new)
                     if created_owner:
                         created += 1
                     # строки ТЧ не меняют updated (счётчик строк см. rows_tabular)
@@ -403,11 +404,20 @@ def _update_row(work: Path, t: Any, idr: Any, idref: bytes,
     raise BridgeError(f'не найдена строка {idref.hex()} для обновления')
 
 
-def _load_tabular(work: Path, db: Database1CD, t: Any, lookup: FieldLookupIndex,
-                  obj_fullname: str, fm_by_name: dict[str, Any],
+def _split_owner(obj_fullname: str) -> tuple[str, str]:
+    """'Документ.Х' -> (obj, ''); 'Документ.Х.ТЧ._VT...' -> (obj, '_VT...')."""
+    parts = obj_fullname.split('.')
+    if len(parts) == 4 and parts[2] == 'ТЧ':
+        return '.'.join(parts[:2]), parts[3]
+    return obj_fullname, ''
+
+
+def _load_tabular(work: Path, db: Database1CD, t: Any, vt: Any,
+                  lookup: FieldLookupIndex, obj_name: str,
+                  fm_by_name: dict[str, Any],
                   phys_ru: dict[str, str], search_cols: list[ColumnSpec],
                   columns: list[ColumnSpec], values: dict[str, Any],
-                  vt_cache: dict[str, Any], vt_lines: dict[bytes, int],
+                  vt_lines: dict[bytes, int],
                   owner_cache: dict[tuple[str, ...], bytes], no_new: bool) -> bool:
     """Режим 1 (табличная часть): найти/создать владельца по search-колонкам,
 
@@ -417,7 +427,9 @@ def _load_tabular(work: Path, db: Database1CD, t: Any, lookup: FieldLookupIndex,
     объект-владелец.
     """
     own_key = tuple(_owner_key(values.get(c.attr)) for c in search_cols)
-    owner = _find_catalog(lookup, obj_fullname, search_cols, values)
+    if vt is None:
+        raise BridgeError(f'у владельца {t.name!r} нет табличной части (_VT)')
+    owner = _find_catalog(lookup, obj_name, search_cols, values)
     created_owner = False
     if owner is None:
         owner = owner_cache.get(own_key)
@@ -432,9 +444,6 @@ def _load_tabular(work: Path, db: Database1CD, t: Any, lookup: FieldLookupIndex,
         append_records(work, t.name, row_bytes)
         created_owner = True
         owner_cache[own_key] = owner
-    vt = _vt_for(db, t, vt_cache)
-    if vt is None:
-        raise BridgeError(f'у владельца {t.name!r} нет табличной части (_VT)')
     line = vt_lines.get(owner, _max_line(db, vt, owner) + 1)
     vt_attrs = {c.attr: values[c.attr] for c in columns
                 if c.flag and not c.search and c.attr in values}
@@ -451,7 +460,11 @@ def _owner_key(v: Any) -> str:
     return _norm(v) if v is not None else ''
 
 
-def _vt_for(db: Database1CD, t: Any, vt_cache: dict[str, Any]) -> Any | None:
+def _vt_for(db: Database1CD, t: Any, vt_cache: dict[str, Any],
+            vt_name: str = '') -> Any | None:
+    """VT-таблица владельца: по явному имени (ТЧ из obj_fullname) или первой."""
+    if vt_name:
+        return db.tables.get(vt_name)
     prefix = t.name + '_VT'
     if prefix in vt_cache:
         return vt_cache[prefix]

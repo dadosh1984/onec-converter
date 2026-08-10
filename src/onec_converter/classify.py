@@ -40,17 +40,32 @@ def classify_objects(meta: dict[str, Any]) -> dict[str, str]:
 def build_plan(meta: dict[str, Any]) -> list[dict[str, str]]:
     """План переноса: только user-объекты, каждый в отдельный файл моста.
 
-    Экспорт моста (export_bridge) умеет Справочник и РегистрСведений;
-    остальные user-объекты (Документ и др.) — не переносятся, пока
-    выгрузка моста для них не реализована.
+    Справочник/РегистрСведений — как есть; Документ — шапка + по одному
+    разделу на каждую табличную часть ('Документ.Х.ТЧ.<таблица>').
+    Остальные user-объекты (Константа и др.) пока не переносятся.
     """
-    supported = {'Справочник', 'РегистрСведений'}
+    supported = {'Справочник', 'РегистрСведений', 'Документ'}
+    tables = set(meta.get('tables', []))
     plan: list[dict[str, str]] = []
     for full, category in classify_objects(meta).items():
         if category != 'user':
             continue
         kind = full.split('.', 1)[0]
         if kind not in supported:
+            continue
+        if kind == 'Документ':
+            # шапка документа
+            plan.append({'name': full, 'category': category,
+                         'file': f'{full}.xlsx'})
+            # табличные части: физические таблицы <таблица>_VT...
+            obj = next((o for o in meta.get('objects', [])
+                        if f"{o['kind']}.{o['name']}" == full), None)
+            if obj:
+                base = obj.get('table', '')
+                for vt in sorted(t for t in tables if t.startswith(f'{base}_VT')):
+                    vt_full = f'{full}.ТЧ.{vt}'
+                    plan.append({'name': vt_full, 'category': category,
+                                 'file': f'{vt_full}.xlsx'})
             continue
         plan.append({'name': full, 'category': category,
                      'file': f'{full}.xlsx'})
