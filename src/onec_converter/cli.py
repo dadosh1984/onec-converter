@@ -793,9 +793,12 @@ def cmd_bridge_verify(args: argparse.Namespace) -> int:
     from .epf_load import BridgeError
 
     try:
+        ignore_cols = ([c.strip() for c in args.ignore_cols.split(',')
+                        if c.strip()] if getattr(args, 'ignore_cols', '') else None)
         rep = verify_roundtrip(args.target_dir, args.target_dir,
                                args.type, args.input, workdir=args.workdir,
-                               limit=args.limit or None, key_col=args.key or '')
+                               limit=args.limit or None, key_col=args.key or '',
+                               ignore_cols=ignore_cols)
     except (BridgeError, OSError, ValueError) as exc:
         return _err(str(exc))
     print(json.dumps(rep, ensure_ascii=False, default=str))
@@ -1723,7 +1726,9 @@ def build_parser() -> argparse.ArgumentParser:
                                  help='куда класть временный обратный мост')
     p_bridge_verify.add_argument('--limit', type=int, default=0)
     p_bridge_verify.add_argument('--key', default='',
-                                 help='ключевая колонка сверки (по умолчанию поле поиска)')
+                                 help='ключевая(ые) колонка(и) сверки через запятую (по умолчанию поле поиска)')
+    p_bridge_verify.add_argument('--ignore-cols', default='',
+                                 help='служебные колонки через запятую, исключаемые из сравнения (_VERSION,_MARKED)')
 
     p_xlsx = sub.add_parser('export-xlsx',
                             help='Первые N строк таблицы 1CD в XLSX (Фаза 53 U11)')
