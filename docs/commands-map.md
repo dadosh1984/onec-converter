@@ -3,7 +3,7 @@
 Сгенерировано из фактического реестра: CLI 38 подкоманд, MCP 18 тулов.
 Поток данных: inspect → extract → map → transform → load → verify.
 
-## CLI (38)
+## CLI (39)
 
 | Команда | Вход | Выход | Назначение |
 |---|---|---|---|
@@ -37,6 +37,7 @@
 | bridge-export | source_dir, type | xlsx | справочник/регистр -> xlsx-мост (аналог epf-макета) |
 | bridge-import | xlsx, target_dir | копия | xlsx-мост -> копия приёмника (find-or-create) |
 | bridge-verify | xlsx, target_dir(копия) | отчёт | обратный контроль: сверка данных копии приёмника с мостом |
+| bridge-migrate | source_dir, target_dir | отчёт | перенос user-данных: копия приёмника → план → мосты по разделам → загрузка + обратный тест |
 | shell | source-dir | REPL | интерактивное исследование базы (tables/query, Фаза 39) |
 | migrate | source-dir, out | JSON/direct | сквозной перенос одной командой: extract→transform→load (Фаза 56) |
 | wizard | (интерактив) | команда | мастер переноса, собирает и запускает migrate (Фаза 56) |

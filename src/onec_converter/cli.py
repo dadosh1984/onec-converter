@@ -787,6 +787,25 @@ def cmd_bridge_import(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bridge_migrate(args: argparse.Namespace) -> int:
+    """Перенос user-данных: копия приёмника → план → мосты по разделам
+    → загрузка + обратный тест (по одному файлу, цикл до совпадения)."""
+    from .user_data_migrate import MigrateError, run_migration
+
+    try:
+        rep = run_migration(
+            args.source_dir, args.target_dir,
+            workdir=args.workdir or None,
+            objects=args.objects or '',
+            key_col=args.key or '',
+            ignore_cols=([c.strip() for c in args.ignore_cols.split(',')]
+                         if args.ignore_cols else None))
+    except (MigrateError, OSError, ValueError) as exc:
+        return _err(str(exc))
+    print(json.dumps(rep, ensure_ascii=False, default=str))
+    return 0 if rep.get('ok') else 1
+
+
 def cmd_bridge_verify(args: argparse.Namespace) -> int:
     """Обратный контроль: выгрузить из КОПИИ приёмника в мост и сверить."""
     from .bridge_verify import verify_roundtrip
@@ -1730,6 +1749,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_bridge_verify.add_argument('--ignore-cols', default='',
                                  help='служебные колонки через запятую, исключаемые из сравнения (_VERSION,_MARKED)')
 
+    p_bridge_migrate = sub.add_parser('bridge-migrate',
+                                      help='перенос user-данных: копия приёмника → план → мосты по разделам → загрузка + обратный тест')
+    p_bridge_migrate.add_argument('--source-dir', required=True,
+                                  help='каталог ИБ источника (read-only, 1Cv8.1CD)')
+    p_bridge_migrate.add_argument('--target-dir', required=True,
+                                  help='каталог ИБ приёмника (1Cv8.1CD)')
+    p_bridge_migrate.add_argument('--workdir', default='',
+                                  help='куда класть копию приёмника и мосты')
+    p_bridge_migrate.add_argument('--objects', default='',
+                                  help='фильтр разделов через запятую, напр. Справочник.Банки')
+    p_bridge_migrate.add_argument('--key', default='',
+                                  help='ключевая(ые) колонка(и) сверки через запятую')
+    p_bridge_migrate.add_argument('--ignore-cols', default='',
+                                  help='служебные колонки через запятую, исключаемые из сравнения (_VERSION,_MARKED)')
+
     p_xlsx = sub.add_parser('export-xlsx',
                             help='Первые N строк таблицы 1CD в XLSX (Фаза 53 U11)')
     p_xlsx.add_argument('--source-dir', required=True)
@@ -1953,6 +1987,7 @@ def main(argv: list[str] | None = None) -> int:
         'bridge-export': cmd_bridge_export,
         'bridge-import': cmd_bridge_import,
         'bridge-verify': cmd_bridge_verify,
+        'bridge-migrate': cmd_bridge_migrate,
         'stats': cmd_stats,
         'mcp': cmd_mcp,
         'migrate': cmd_migrate,
