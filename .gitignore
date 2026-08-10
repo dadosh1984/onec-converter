@@ -47,3 +47,7 @@ ONEC_TEST_TMP/
 .coverage
 migr_81_83/
 workdir_83/
+
+# XML-выгрузки конфигураций (сотни МБ — не в git)
+XML_8.1/
+XML_8.3/
