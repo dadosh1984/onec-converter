@@ -29,6 +29,46 @@ _META_TAGS = frozenset({
     'ПакетXDTO', 'WebСервис', 'WSСсылка', 'HTTPСервис',
 })
 
+# Английские теги MDClasses (выгрузка конфигурации 1С: Catalog, Document...) -> русский kind
+_META_TAGS_EN: dict[str, str] = {
+    'Catalog': 'Справочник',
+    'Document': 'Документ',
+    'Constant': 'Константа',
+    'Enum': 'Перечисление',
+    'AccumulationRegister': 'РегистрНакопления',
+    'InformationRegister': 'РегистрСведений',
+    'AccountingRegister': 'РегистрБухгалтерии',
+    'CalculationRegister': 'РегистрРасчета',
+    'ChartOfAccounts': 'ПланСчетов',
+    'ChartOfCharacteristicTypes': 'ПланВидовХарактеристик',
+    'ChartOfCalculationTypes': 'ПланВидовРасчета',
+    'ExchangePlan': 'ПланОбмена',
+    'Report': 'Отчет',
+    'DataProcessor': 'Обработка',
+    'CommonModule': 'ОбщийМодуль',
+    'SessionModule': 'МодульСеанса',
+    'CommonAttribute': 'ОбщийРеквизит',
+    'CommonForm': 'ОбщаяФорма',
+    'CommandGroup': 'ГруппаКоманд',
+    'Command': 'Команда',
+    'Role': 'Роль',
+    'Subsystem': 'Подсистема',
+    'EventSubscription': 'ПодпискаНаСобытие',
+    'ScheduledJob': 'РегламентноеЗадание',
+    'Language': 'Язык',
+    'Style': 'Стиль',
+    'StyleItem': 'ЭлементСтиля',
+    'CommonPicture': 'ОбщаяКартинка',
+    'FunctionalOption': 'ФункциональнаяОпция',
+    'WebService': 'WebСервис',
+    'HTTPService': 'HTTPСервис',
+    'XDTOPackage': 'ПакетXDTO',
+    'SettingsStorage': 'ХранилищеНастроек',
+    'FilterCriterion': 'КритерийОтбора',
+    'CommonTemplate': 'ОбщийМакет',
+    'DefinedType': 'ОпределяемыйТип',
+}
+
 
 class FetchConfigError(Exception):
     """Ошибка загрузки релиза конфигурации."""
@@ -39,6 +79,8 @@ def parse_configuration_xml(source: str | Path) -> dict[str, object]:
 
     objects: [{kind, name, uuid}] — объекты верхнего уровня из
     MetaDataObject/Configuration/ChildObjects (каталог поставки).
+    kind — русское имя вида (Справочник/Документ/...): принимаются и
+    русские теги, и английские теги MDClasses (Catalog/Document/Constant...).
     """
     src = Path(source)
     if not src.is_dir():
@@ -58,14 +100,15 @@ def parse_configuration_xml(source: str | Path) -> dict[str, object]:
     def walk(node: ET.Element) -> None:
         for child in node:
             kind = child.tag.split('}')[-1]
-            if kind in _META_TAGS:
+            ru_kind = _META_TAGS_EN.get(kind, kind)
+            if ru_kind in _META_TAGS:
                 uuid = child.attrib.get('uuid', '')
                 name = ''
                 for props in child.iter():
                     if props.tag.split('}')[-1] == 'Name' and props.text:
                         name = props.text
                         break
-                objects.append({'kind': kind, 'name': name, 'uuid': uuid})
+                objects.append({'kind': ru_kind, 'name': name, 'uuid': uuid})
             walk(child)
 
     for child in root:

@@ -23,7 +23,7 @@
 | clone-db | source_dir, target_dir | копия | полная копия ИБ (стенд) |
 | audit | audit.jsonl | отчёт | просмотр/фильтр журнала |
 | techlog | source_dir | события | техжурнал 1С как источник |
-| fetch-config | source | метаданные | релиз конфигурации (XML-выгрузка) |
+| fetch-config | source | метаданные | релиз конфигурации (XML-выгрузка; рус. и англ. теги MDClasses) |
 | dump-report | file, s3 | S3 | экспорт отчёта в S3 (SigV4) |
 | sonar-report | target | XML/JSON | отчёт ruff в sonar-формате |
 | export-kd3 | rules.json | XML | правила TOON в XML КД3-стиля |
