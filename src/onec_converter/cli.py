@@ -799,7 +799,8 @@ def cmd_bridge_migrate(args: argparse.Namespace) -> int:
             objects=args.objects or '',
             key_col=args.key or '',
             ignore_cols=([c.strip() for c in args.ignore_cols.split(',')]
-                         if args.ignore_cols else None))
+                         if args.ignore_cols else None),
+            pilot_rows=getattr(args, 'pilot_rows', 3))
     except (MigrateError, OSError, ValueError) as exc:
         return _err(str(exc))
     print(json.dumps(rep, ensure_ascii=False, default=str))
@@ -1763,6 +1764,8 @@ def build_parser() -> argparse.ArgumentParser:
                                   help='ключевая(ые) колонка(и) сверки через запятую')
     p_bridge_migrate.add_argument('--ignore-cols', default='',
                                   help='служебные колонки через запятую, исключаемые из сравнения (_VERSION,_MARKED)')
+    p_bridge_migrate.add_argument('--pilot-rows', type=int, default=3,
+                                  help='пилотный прогон: сколько строк загрузить и сверить до полного переноса (0 — без пилота)')
 
     p_xlsx = sub.add_parser('export-xlsx',
                             help='Первые N строк таблицы 1CD в XLSX (Фаза 53 U11)')

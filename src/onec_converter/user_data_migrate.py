@@ -58,30 +58,48 @@ def load_and_verify(bridge_path: str | Path, target_dir: str | Path,
                     obj_fullname: str = '',
                     workdir: str | Path | None = None,
                     key_col: str = '', ignore_cols: list[str] | None = None,
-                    max_tries: int = 3) -> dict[str, Any]:
+                    max_tries: int = 3,
+                    pilot_rows: int = 3) -> dict[str, Any]:
     """Загрузить один мост в копию приёмника и прогнать обратный тест.
 
-    Цикл повторяется до ok=True (не более max_tries раз): после каждой
-    загрузки verify_roundtrip сравнивает данные копии приёмника с мостом
-    источника; расхождения фиксируются в отчёте.
+    Пилотный прогон: сначала загружаются первые pilot_rows строк моста и
+    сверяются обратным тестом (limit=pilot_rows); если пилот ок — загрузка
+    всех строк и полная сверка. Цикл повторяется до ok=True (не более
+    max_tries раз); расхождения фиксируются в отчёте.
     """
     attempts = 0
     imp: dict[str, Any] = {}
+    pilot: dict[str, Any] = {'ok': False}
     while attempts < max_tries:
         attempts += 1
-        imp = import_bridge(bridge_path, target_dir, workdir=workdir)
+        # пилот: 2-3 позиции сначала, полный перенос — только после их сверки
+        imp = import_bridge(bridge_path, target_dir, workdir=workdir,
+                            max_rows=pilot_rows or None)
         if not imp.get('ok'):
             return {'ok': False, 'attempt': attempts,
                     'error': imp.get('error', 'импорт не удался')}
         # данные записаны в КОПИЮ (work.1CD) — верифицируем именно её каталог
         copied = Path(imp['copy_path']).parent
+        if pilot_rows:
+            pilot = verify_roundtrip(copied, copied, obj_fullname,
+                                     bridge_path, workdir=copied,
+                                     limit=pilot_rows, key_col=key_col,
+                                     ignore_cols=ignore_cols)
+            if not pilot.get('ok'):
+                return {'ok': False, 'attempt': attempts, 'pilot': pilot,
+                        'error': 'пилотная сверка не совпала — полная загрузка не выполнена'}
+        imp = import_bridge(bridge_path, target_dir, workdir=workdir)
+        if not imp.get('ok'):
+            return {'ok': False, 'attempt': attempts,
+                    'error': imp.get('error', 'импорт не удался')}
         ver = verify_roundtrip(copied, copied, obj_fullname,
                                bridge_path, workdir=copied, key_col=key_col,
                                ignore_cols=ignore_cols)
         if ver.get('ok'):
-            return {'ok': True, 'attempt': attempts, 'imported': imp,
-                    'verify': ver}
-    return {'ok': False, 'attempt': attempts, 'imported': imp, 'verify': ver}
+            return {'ok': True, 'attempt': attempts, 'pilot': pilot,
+                    'imported': imp, 'verify': ver}
+    return {'ok': False, 'attempt': attempts, 'pilot': pilot,
+            'imported': imp, 'verify': ver}
 
 
 def run_migration(source_dir: str | Path, target_dir: str | Path,
@@ -89,7 +107,8 @@ def run_migration(source_dir: str | Path, target_dir: str | Path,
                   objects: str = '',
                   meta: dict[str, Any] | None = None,
                   key_col: str = '',
-                  ignore_cols: list[str] | None = None) -> dict[str, Any]:
+                  ignore_cols: list[str] | None = None,
+                  pilot_rows: int = 3) -> dict[str, Any]:
     """Полный цикл переноса пользовательских данных:
     пути -> копия приёмника -> план -> экспорт мостов -> загрузка+обратный тест."""
     rep = check_paths(source_dir, target_dir)
@@ -115,7 +134,8 @@ def run_migration(source_dir: str | Path, target_dir: str | Path,
     for bridge, item in zip(files, plan):
         results[item['name']] = load_and_verify(
             bridge, target_copy, obj_fullname=item['name'],
-            workdir=wd / 'tmp', key_col=key_col, ignore_cols=ignore_cols)
+            workdir=wd / 'tmp', key_col=key_col, ignore_cols=ignore_cols,
+            pilot_rows=pilot_rows)
 
     ok = all(r.get('ok') for r in results.values())
     return {'ok': ok, 'source': str(src), 'target_copy': str(target_copy),

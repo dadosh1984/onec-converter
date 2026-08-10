@@ -1,20 +1,23 @@
-"""README/commands-map: fetch-config поддерживает английские теги."""
+"""fetch-config: английские теги MDClasses (Catalog/Document/Constant...)."""
 from __future__ import annotations
 
-from pathlib import Path
+import xml.etree.ElementTree as ET
 
-ROOT = Path(__file__).resolve().parent.parent
-
-
-def test_commands_map_mentions_english_tags():
-    cm = ROOT / 'docs' / 'commands-map.md'
-    if not cm.is_file():
-        return  # файла нет — тест пропускается (не ошибка)
-    text = cm.read_text(encoding='utf-8')
-    assert 'fetch-config' in text
+from onec_converter.fetch_config import _META_TAGS_EN
 
 
-def test_fetch_config_docstring_mentions_english():
-    src = (ROOT / 'src' / 'onec_converter' / 'fetch_config.py')
-    text = src.read_text(encoding='utf-8')
-    assert 'Catalog' in text or 'MDClasses' in text or 'англ' in text.lower()
+def test_mapping_has_key_catalogs():
+    assert _META_TAGS_EN['Catalog'] == 'Справочник'
+    assert _META_TAGS_EN['Document'] == 'Документ'
+    assert _META_TAGS_EN['Constant'] == 'Константа'
+    assert _META_TAGS_EN['Enum'] == 'Перечисление'
+    assert _META_TAGS_EN['AccumulationRegister'] == 'РегистрНакопления'
+    assert _META_TAGS_EN['InformationRegister'] == 'РегистрСведений'
+    assert _META_TAGS_EN['ChartOfAccounts'] == 'ПланСчетов'
+
+
+def test_mapping_values_are_valid_xml_tags():
+    # русские значения — это теги из _META_TAGS (совместимость с русской выгрузкой)
+    from onec_converter.fetch_config import _META_TAGS
+    for ru in _META_TAGS_EN.values():
+        assert ru in _META_TAGS

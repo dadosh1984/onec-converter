@@ -150,6 +150,10 @@ def verify_roundtrip(source_dir: str | Path, copied_dir: str | Path,
     try:
         exp = export_bridge(source_dir, obj_fullname, out_tmp, limit=limit or 0)
         in_cfg, in_rows = read_bridge(bridge_in)
+        # limit — пилотный прогон: сверяем только первые N строк моста
+        # (загруженных в копию приёмника) с первыми N строками из неё.
+        if limit:
+            in_rows = in_rows[:limit]
         out_cfg, out_rows = read_bridge(out_tmp)
         cmp = compare_code(in_cfg, in_rows, out_cfg, out_rows,
                            key_col, ignore_cols=ignore_cols)
