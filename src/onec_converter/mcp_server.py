@@ -138,19 +138,19 @@ class RbacError(Exception):
     """Недостаточно прав роли MCP-клиента."""
 
 
-_SERVER_META_CACHE: dict[str, object] | None = None
-
-
 def _server_meta() -> dict[str, object]:
     """Метаданные сервера для встраивания в ответ каждого тула.
     server_version — установленный релиз; update — при наличии новой версии
     на PyPI. Вычисляется один раз на процесс, далее кэшируется в памяти;
     сетевой прост к PyPI не чаще раза в сутки (version_check)."""
-    global _SERVER_META_CACHE
+    from .server_state import get_server_state
     from .version_check import _is_newer, current_version
 
-    if _SERVER_META_CACHE is not None:
-        return _SERVER_META_CACHE
+    state = get_server_state()
+    if state is not None:
+        cached = state.get_meta('_server_meta')
+        if cached is not None:
+            return cached  # type: ignore[return-value]
     meta: dict[str, object] = {'server_version': current_version()}
     latest = _latest_local_cache() or _latest_network()
     if _is_newer(latest, current_version()):
@@ -159,7 +159,8 @@ def _server_meta() -> dict[str, object]:
             'latest': latest,
             'message': 'Доступна новая версия onec-converter: '
                        f'{latest} (pip install --upgrade onec-converter)'}
-    _SERVER_META_CACHE = meta
+    if state is not None:
+        state.set_meta('_server_meta', meta)
     return meta
 
 
@@ -853,11 +854,13 @@ def migrate(project_dir: str, source_ib_id: str, target_ib_id: str,
 
         playbook_step(5, 7, 'transform')
         t0 = now_ms()
+        from .resolver import RefResolver
+        resolver = RefResolver()
         transformed: list[dict[str, Any]] = []
         for obj in st.extracted:
             for rule in parsed_rules.get('objects', []):
                 if rule.get('source') == obj.get('type'):
-                    transformed.append(transform_object(obj, rule, resolver=None))  # type: ignore[arg-type]
+                    transformed.append(transform_object(obj, rule, resolver))
                     break
         log('transform', True, now_ms() - t0, f"objects={len(transformed)}")
 

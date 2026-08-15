@@ -1,4 +1,4 @@
-"""Прямая загрузка в 1CD без HTTP-расширения (Фаза 13, zero-setup A).
+"""Прямая загрузка в 1CD без HTTP-расширения (, zero-setup A).
 
 После transform объект приёмника: {'type': 'Справочник.X', 'key': [...],
 'attributes': {имя_реквизита: значение}} (русские имена реквизитов, как в
@@ -9,7 +9,7 @@ write_8x.append_records; оригинал никогда не изменяетс
 - _IDRREF: префикс (4 байта) из первой непустой строки таблицы (или нули)
   + уникальные 12 байт; точная семантика префикса 1С не гарантируется
   (наш парсер читает без потерь);
-- индексы таблиц не пересобираются (см. Фаза 12).
+- индексы таблиц не пересобираются (см.).
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from .audit import get_audit
+from .errors import ConverterRuntimeError, LoadError
 from .load_8x_refs import ReceiverReferenceIndex, _encode_field, make_vt_row
 from .source_8x_file import Database1CD, TableDef, read_metadata
 from .strict import validate_object
@@ -31,7 +32,7 @@ _IDREF_LEN = 16
 _PREFIX_LEN = 4
 
 
-class LoadError(Exception):
+class LoadError(ConverterRuntimeError):
     """Ошибка прямой загрузки в 1CD."""
 
 
@@ -53,8 +54,8 @@ def object_to_row(table: TableDef, fields: list[FieldMap], obj: dict[str, Any],
 
     _VERSION/_MARKED и прочие служебные поля — нули; _IDRREF — idref;
     _CODE/_DESCRIPTION — из key или атрибутов «Код»/«Наименование»;
-    _NUMBER/_DATE_TIME/_POSTED — из атрибутов документа (Фаза 15);
-    REF-поля — резолв через ref_index (Фаза 15);
+    _NUMBER/_DATE_TIME/_POSTED — из атрибутов документа ();
+    REF-поля — резолв через ref_index ();
     остальные атрибуты — по полям таблицы (русские имена).
     """
     row = bytearray(table.row_length or 1)
@@ -125,7 +126,12 @@ def _resolve_ref(ref_value: Any, ref_index: Any) -> bytes:
 
 
 def _idref_prefix(db: Database1CD, table_name: str) -> bytes:
-    """Первые 4 байта из первой непустой строки таблицы (или нули)."""
+    """Первые 4 байта из первой непустой строки таблицы.
+
+    Если таблица пуста или все префиксы нулевые — детерминированный
+    префикс из MD5-хеша имени таблицы (предотвращает коллизии _IDRREF
+    между разными таблицами).
+    """
     t = db.tables[table_name]
     idr = t.fields.get('_IDRREF')
     if idr is None:
@@ -136,7 +142,9 @@ def _idref_prefix(db: Database1CD, table_name: str) -> bytes:
         raw = row[idr.offset:idr.offset + _IDREF_LEN]
         if raw != b'\x00' * _IDREF_LEN:
             return raw[:_PREFIX_LEN]
-    return b'\x00' * _PREFIX_LEN
+    # Детерминированный префикс из имени таблицы
+    import hashlib
+    return hashlib.md5(table_name.encode()).digest()[:_PREFIX_LEN]
 
 
 def _table_for(obj_type: str, index: dict[str, dict[str, Any]],
@@ -164,16 +172,17 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
                 verify_after: bool = True,
                 max_objects: int | None = None,
                 strict: bool = False,
-                snapshot: bool = True) -> dict[str, Any]:
+                snapshot: bool = True,
+                audit: Any | None = None) -> dict[str, Any]:
     """Прямая запись объектов в КОПИЮ приёмника; оригинал не изменяется.
 
     Возвращает {'ok', 'copy_path', 'total', 'tables', 'ref_warnings',
-    'verify', 'snapshot'}. Документы и табличные части (Фаза 15): REF-поля
+    'verify', 'snapshot'}. Документы и табличные части (): REF-поля
     резолвятся в _IDRREF приёмника, ненайденные — 16 нулей + ref_warnings.
-    Атомарный replace (Фаза 16): пишем во временный work-файл, по
+    Атомарный replace (): пишем во временный work-файл, по
     завершении заменяем; verify_after читает записанное парсером и сверяет
     без потерь; max_objects — лимит размера батча (LoadError при
-    превышении). snapshot (Фаза 24): до записи копия приёмника
+    превышении). snapshot (): до записи копия приёмника
     сохраняется в workdir/snapshot.1CD — откат при сбое; `snapshot=False`
     (--no-snapshot) отключает.
     """
@@ -259,7 +268,7 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
             progress.update(obj_type, table_name, rows=1)
             progress.draw(obj_type, table_name)
             _ref_report(obj_type, references, ref_index, meta, ref_warnings)
-            # табличные части (Фаза 15)
+            # табличные части ()
             for ts in (obj.get('tab_sections') or {}).values():
                 vt_table = _vt_table_for(db, table_name)
                 if vt_table is None:
@@ -267,12 +276,13 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
                 for i, r in enumerate(ts.get('rows') or []):
                     vrow = make_vt_row(vt_table, idref, i + 1, r)
                     vt_rows_by_table.setdefault(vt_table.name, []).append(vrow)
-            # аудит (Фаза 25): каждый перенесённый объект — источник→приёмник,
+            _audit = audit or get_audit()  # noqa: F841 используем или глобальный
+            # аудит: каждый перенесённый объект — источник→приёмник,
             # GUID приёмника, время
-            get_audit().info('load', obj=obj_type, guid=idref.hex(),
+            _audit.info('load', obj=obj_type, guid=idref.hex(),
                              rule=str(obj.get('_rule') or ''), result='ok')
         for w in ref_warnings:
-            get_audit().warning('load', obj=str(obj_type or ''), detail=w)
+            _audit.warning('load', obj=str(obj_type or ''), detail=w)
 
     tables_stat: dict[str, int] = {}
     try:
@@ -291,17 +301,18 @@ def load_direct(target_dir: str | Path, objects: list[dict[str, Any]],
 
     final = wd / '1Cv8.1CD'
     try:
-        os.replace(work, final)   # атомарная замена (Фаза 16)
+        os.replace(work, final)   # атомарная замена ()
     except OSError as e:
         _cleanup_workfiles(wd)
         if getattr(e, 'errno', None) in (28, 112):  # ENOSPC
             raise LoadError('недостаточно места на диске: ' + str(e)) from e
         raise
+    _audit = audit or get_audit()
     report: dict[str, Any] = {}
     if verify_after:
         report = _verify_direct(objects, final, index, prefix_by_table,
                                 idref_counter, ref_index)
-    get_audit().info('load', obj=str(len(objects)), result='ok',
+    _audit.info('load', obj=str(len(objects)), result='ok',
                      detail=f'total={len(objects)} tables={tables_stat}')
     progress.finish({'total': len(objects)}, ok=True)
     return {'ok': True, 'copy_path': str(final), 'total': len(objects),

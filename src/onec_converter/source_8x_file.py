@@ -371,7 +371,7 @@ class Database1CD:
         self._locale = ''
         self._blob_cache: dict[int, bytes] = {}  # blob_page -> данные blob-таблицы
         self._blob_cache_bytes = 0
-        self._blob_cache_max = 64 * 1024 * 1024  # лимит кеша blob (Фаза 47)
+        self._blob_cache_max = 64 * 1024 * 1024  # лимит кеша blob ()
         self._root_data: bytes | None = None  # данные root-объекта (каталог)
         self._ref_table_cache: dict[str, dict[bytes, str]] = {}  # таблица -> idrref: имя
         self._ref_name_cache: dict[tuple[str, bytes], str | None] = {}
@@ -382,7 +382,7 @@ class Database1CD:
 
         Идея A2 (1C_PrometheusExporter): метрики таблиц для оценки объёма
         переноса. Лениво: данные таблицы читаются один раз и кешируются.
-        Чтение точечное (mmap-срез страниц таблицы, Фаза 49 U37), а не
+        Чтение точечное (mmap-срез страниц таблицы, а не
         полный проход по файлу.
         """
         if table_name not in self._stats_cache:
@@ -393,7 +393,7 @@ class Database1CD:
         return self._stats_cache[table_name]
 
     def table_stats_all(self) -> dict[str, tuple[int, int]]:
-        """Статистика всех таблиц одним проходом (U37): общий кеш и mmap.
+        """Статистика всех таблиц одним проходом : общий кеш и mmap.
 
         Один цикл вместо N отдельных вызовов — каждый вызов table_stats
         ложится в общий кеш, повторные запросы не читают страницы.
@@ -579,7 +579,7 @@ class Database1CD:
 
     def read_blob(self, table: TableDef, first_chunk: int, size: int) -> bytes:
         """Чтение blob-цепочки таблицы (данные blob-таблицы кешируются с
-        лимитом объёма — при переполнении кеш очищается, Фаза 47)."""
+        лимитом объёма — при переполнении кеш очищается)."""
         if size <= 0:
             return b''
         data = self._blob_cache.get(table.blob_page)
@@ -988,7 +988,7 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
     Объекты конфигурации (CONFIG/DBNames) связываются с физическими таблицами
     по DBNames (kind + номер); поля — физические поля таблицы.
     Результат кешируется на диск (по признакам файла) и в памяти
-    (LRU, Фаза 49 U39) — повторные вызовы для одной и той же базы
+    (LRU— повторные вызовы для одной и той же базы
     выполняются за миллисекунды.
     """
     p = Path(path)
@@ -1008,7 +1008,7 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
     try:
         db = Database1CD(p)
     except (FormatError, OSError) as exc:
-        # понятная диагностика на битых/не-ИБ файлах (Фаза 47)
+        # понятная диагностика на битых/не-ИБ файлах ()
         raise FormatError(
             f'read_metadata({p}): файл повреждён или не является ИБ 8.x: '
             f'{exc}') from exc
@@ -1077,7 +1077,7 @@ def read_metadata(path: str | Path) -> dict[str, Any]:
     return result
 
 
-# ---- in-memory LRU для read_metadata (Фаза 49, U39: MCP-сессии) ----
+# ---- in-memory LRU для read_metadata : MCP-сессии) ----
 _MEM_META_MAX = 8
 _mem_meta: OrderedDict[str, dict[str, Any]] = OrderedDict()
 

@@ -1,4 +1,4 @@
-"""SQL-источники 1С (PostgreSQL / MS SQL), Фаза 36.
+"""SQL-источники 1С (PostgreSQL / MS SQL)
 
 Чтение ИБ 1С, размещённой не в файле 1Cv8.1CD, а на SQL-сервере. Внимание:
 точный парсинг служебных таблиц 1С (v8_metadata, _Reference…, _InfoRg,
@@ -120,8 +120,7 @@ class GenericSqlSource:
                 from .secret_mask import mask_dsn
 
                 msg = f'не удалось подключиться к {self.kind}: {exc}'
-                # секреты DSN не утекают в исключение (U8/U27)
-                raise SqlSourceError(mask_dsn(msg)) from exc
+                # секреты DSN не утекают в исключение /raise SqlSourceError(mask_dsn(msg)) from exc
         return self._conn
 
     def close(self) -> None:

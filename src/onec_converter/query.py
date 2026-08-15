@@ -1,4 +1,4 @@
-"""SQL-подобная консоль запросов к таблицам 1CD (Фаза 11, идея E1).
+"""SQL-подобная консоль запросов к таблицам 1CD (, .
 
 Безопасный мини-SQL без exec: только лексический разбор строк запроса.
 Выполняется поверх `Database1CD.table_rows` — тот же коннектор, что у
@@ -38,10 +38,36 @@ class QueryCondition:
     value: str
 
 
+def _split_where_parts(where: str) -> list[str]:
+    """Разбить WHERE на части по `;` вне кавычек (одинарных/двойных)."""
+    parts: list[str] = []
+    cur: list[str] = []
+    in_sq = False  # одинарные кавычки
+    in_dq = False  # двойные кавычки
+    for ch in where:
+        if ch == "'" and not in_dq:
+            in_sq = not in_sq
+        elif ch == '"' and not in_sq:
+            in_dq = not in_dq
+        elif ch == ';' and not in_sq and not in_dq:
+            parts.append(''.join(cur))
+            cur = []
+            continue
+        cur.append(ch)
+    rest = ''.join(cur).strip()
+    if rest:
+        parts.append(rest)
+    return parts
+
+
 def parse_where(where: str) -> list[QueryCondition]:
-    """Разбор WHERE: `f=1; g>2; name LIKE 'A%'` — список условий."""
+    """Разбор WHERE: `f=1; g>2; name LIKE 'A%'` — список условий.
+
+    Точка с запятой внутри строковых литералов (в кавычках) не разрывает
+    условие.
+    """
     conds: list[QueryCondition] = []
-    for part in (p for p in where.split(';') if p.strip()):
+    for part in (p for p in _split_where_parts(where) if p.strip()):
         for op in _OPS:
             if op in part:
                 fname, _, raw = part.partition(op)

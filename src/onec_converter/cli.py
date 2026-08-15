@@ -39,7 +39,11 @@ from .validate import validate_batch
 
 
 class CLIError(Exception):
-    """Ошибка CLI: сообщение в stderr, код возврата 1."""
+    """Ошибка CLI: сообщение в stderr, код возврата 1.
+
+    .. deprecated::
+        Используйте ConfigError из errors.py.
+    """
 
 
 def _err(msg: str) -> int:
@@ -1264,7 +1268,9 @@ def cmd_metrics(_args: argparse.Namespace) -> int:
 
     base = render_from_timings(Timings().snapshot(), Cache().stats())
     print(base)
-    print(get_progress().render_prometheus())
+    p = get_progress()
+    if p is not None:
+        print(p.render_prometheus())
     return 0
 
 

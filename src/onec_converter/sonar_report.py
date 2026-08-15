@@ -1,9 +1,9 @@
-"""Sonar-отчёт по lint: `sonar-report` (Фаза 28, идея acc-export/stebi).
+"""Sonar-отчёт по lint: `sonar-report` (, идея acc-export/stebi).
 
 Генерация отчёта ruff в формате SonarQube «Generic Issue Import» (XML) или
 JSON — для CI-интеграции: запуск `python -m ruff check <target> --output-format=json`
 и конвертация записей в issues. Правила отображаются без префикса
-(например RUF022 -> RU022), severity: F/E -> MAJOR, прочее -> MINOR.
+(например RUF022 -> R, severity: F/E -> MAJOR, прочее -> MINOR.
 """
 from __future__ import annotations
 

@@ -51,3 +51,6 @@ workdir_83/
 # XML-выгрузки конфигураций (сотни МБ — не в git)
 XML_8.1/
 XML_8.3/
+
+# temp workdir for .dt restore
+.tmp_ndt/

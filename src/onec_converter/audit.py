@@ -1,4 +1,4 @@
-"""Audit-логирование миграции (Фаза 25): JSONL-журнал переноса данных.
+"""Audit-логирование миграции : JSONL-журнал переноса данных.
 
 Записи: время (ISO), уровень (INFO/WARN/ERROR), операция (extract/transform/
 load/clone), объект, GUID приёмника (если есть), правило, результат.
@@ -9,7 +9,7 @@ load/clone), объект, GUID приёмника (если есть), прав
 Идея: oscript-library/logos (log4j-стиль), cpr1c/logosFor1c (сквозное
 логирование). Код авторский.
 
-Формула hash-цепочки (tamper-evident, Фаза 37):
+Формула hash-цепочки (tamper-evident):
   hash  = SHA-256( JSON(dict(record) без ключа 'hash', sort_keys=True) )
   prev_hash(записи) = hash предыдущей записи; для первой записи файла — ''
   (или hash последней записи архива .1 при ротации, см. маркер 'rotated').
@@ -17,16 +17,19 @@ load/clone), объект, GUID приёмника (если есть), прав
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import shutil
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Iterator, TextIO
 
 from .crypto_utils import sha256_hex
 
 LEVELS = ('INFO', 'WARN', 'ERROR')
-_active: AuditLog | None = None
+_audit_ctx: contextvars.ContextVar[AuditLog | None] = contextvars.ContextVar(
+    'audit_ctx', default=None)
 
 # кеш последнего хеша по (путь, mtime, size): повторные открытия того же
 # файла не перечитывают его целиком (50 МБ — заметное разовое чтение)
@@ -120,12 +123,12 @@ def _verify_file(path: Path, errors: list[dict[str, str]], *,
 
 
 def verify_audit(path: str | Path, cross_files: bool = False) -> list[dict[str, str]]:
-    """Проверка целостности JSONL-журнала (tamper-evident, Фаза 37).
+    """Проверка целостности JSONL-журнала (tamper-evident).
 
     Пересчитывает hash-цепочку и возвращает список нарушений (пусто = ок).
     cross_files=True — дополнительно сверяет границы с архивами ротации
     (audit.jsonl.1, .2, ...): первая запись каждого следующего файла обязана
-    иметь prev_hash == хеш последней записи предыдущего (Фаза 42).
+    иметь prev_hash == хеш последней записи предыдущего ().
     """
     errors: list[dict[str, str]] = []
     path = Path(path)
@@ -160,7 +163,7 @@ class AuditLog:
         self._fh: TextIO | None = None
         self._flush_bytes = 0
         self._file_flush = file_flush
-        self._last_hash = ''  # hash предыдущей записи (tamper-evident, Фаза 37)
+        self._last_hash = ''  # hash предыдущей записи (tamper-evident)
         self._pii_masking = pii_masking
         if self._path:
             self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -221,8 +224,8 @@ class AuditLog:
         }
         if self._pii_masking:
             rec['obj'] = _redact(rec['obj'])
-            rec['guid'] = _redact(rec['guid'])
             rec['detail'] = _redact(rec['detail'])
+            # guid не маскируем — это не ПДн, и маскировка ломает целостность аудита
         if self._path:
             rec['prev_hash'] = self._last_hash
             rec['hash'] = _sha256(json.dumps(rec, sort_keys=True, ensure_ascii=False))
@@ -279,18 +282,47 @@ def set_audit(path: str | Path | None, pii_masking: bool = True) -> None:
     «пригодный для ПДн-аудита», поэтому ПДн маскируются всегда, кроме явно
     отключённого случая.
     """
-    global _active
-    if _active is not None:
-        _active.close()
-    _active = AuditLog(path, pii_masking=pii_masking) if path else None
+    cur = _audit_ctx.get()
+    if cur is not None:
+        cur.close()
+    new_audit = AuditLog(path, pii_masking=pii_masking) if path else AuditLog()
+    _audit_ctx.set(new_audit) if path else _audit_ctx.set(None)
 
 
 def get_audit() -> AuditLog:
-    """Активный журнал (лениво создаётся in-memory, если файл не задан)."""
-    global _active
-    if _active is None:
-        _active = AuditLog()
-    return _active
+    """Активный журнал текущего контекста.
+
+    Если ни set_audit(), ни audit_session() не вызывались — создаётся
+    in-memory журнал (глобальный fallback для обратной совместимости).
+    """
+    cur = _audit_ctx.get()
+    if cur is None:
+        # fallback: создаём in-memory (не файл), кешируем в контекст
+        cur = AuditLog()
+        _audit_ctx.set(cur)
+    return cur
+
+
+@contextmanager
+def audit_session(path: str | Path | None = None,
+                 pii_masking: bool = True) -> Iterator[AuditLog]:
+    """Контекстный менеджер для audit-сессии.
+
+    with audit_session('/tmp/audit.jsonl'):
+        get_audit().info('test', obj='x')
+    # после выхода контекст возвращается к предыдущему
+    """
+    old = _audit_ctx.get()
+    new_audit = AuditLog(path, pii_masking=pii_masking)
+    token = _audit_ctx.set(new_audit)
+    try:
+        yield new_audit
+    finally:
+        new_audit.close()
+        if old is not None:
+            _audit_ctx.reset(token)
+        else:
+            _audit_ctx.set(None)
 
 
 def read_audit(path: str | Path) -> list[dict[str, str]]:

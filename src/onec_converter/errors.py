@@ -1,12 +1,79 @@
-"""Базовые ошибки пакета (Фаза 47).
+"""Иерархия исключений onec-converter.
 
-Один предок для доменных ошибок конвертера — чтобы CLI/MCP могли ловить
-все ошибки пакета одним `except OnecConverterError` (а не набором
-несвязанных классов). Модульные ошибки (audit/clone_db/sql_source/health)
-наследуют его, сохраняя свои имена для обратной совместимости.
+Единый базовый класс OnecConverterError вместо россыпи независимых Exception.
 """
-from __future__ import annotations
 
 
 class OnecConverterError(Exception):
-    """Базовая ошибка onec-converter: все доменные ошибки — его потомки."""
+    """Базовое исключение onec-converter."""
+
+
+# Парсинг/формат
+class ParseError(OnecConverterError):
+    """Ошибка разбора формата 1CD, DAT, OLE."""
+
+
+class FormatError(ParseError):
+    """Ошибка формата данных (невалидная сигнатура, размер и т.д.)."""
+
+
+# Конфигурация/маппинг
+class ConfigError(OnecConverterError):
+    """Ошибка конфигурации, правил маппинга или трансформации."""
+
+
+class MappingError(ConfigError):
+    """Ошибка правил маппинга (TOON)."""
+
+
+class TransformError(ConfigError):
+    """Ошибка трансформации объекта."""
+
+
+# Исполнение пайплайна
+class ConverterRuntimeError(OnecConverterError):
+    """Ошибка выполнения (запись/чтение/загрузка)."""
+
+
+class LoadError(ConverterRuntimeError):
+    """Ошибка прямой загрузки в 1CD."""
+
+
+class WriteError(ConverterRuntimeError):
+    """Ошибка прямой записи в 1CD."""
+
+
+class LockError(WriteError):
+    """База открыта/используется — запись запрещена."""
+
+
+class HealthError(ConverterRuntimeError):
+    """Ошибка health-check."""
+
+
+# Безопасность
+class SecurityError(OnecConverterError):
+    """Ошибка безопасности (JWT, SSRF, секреты)."""
+
+
+class JwtError(SecurityError):
+    """Ошибка проверки JWT."""
+
+
+# Запросы
+class QueryError(ParseError):
+    """Ошибка разбора или выполнения SQL-подобного запроса."""
+
+
+# Уведомления
+class NotifyError(ConverterRuntimeError):
+    """Ошибка отправки уведомления."""
+
+
+# Отчёты
+class PiiReportError(OnecConverterError):
+    """Ошибка генерации PII-отчёта."""
+
+
+class SonarReportError(OnecConverterError):
+    """Ошибка генерации Sonar-отчёта."""

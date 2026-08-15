@@ -1,0 +1,16 @@
+{
+  "title": "критические-высокоприоритетные-проблемы-безопасности",
+  "goal": "Исправить критические и высокоприоритетные проблемы безопасности, корректности и архитектуры в onec-converter по результатам аудита. Объём работ: 1. 🔴 Заменить `input()` на `getpass.getpass()` в `cli.py:_resolve_secret` (утечка секретов в shell-истории) 2. 🔴 Добавить SSRF-фильтр в `HttpClient83` (блокировка private/localhost IP при запросах к 1С-расширению) 3. 🔴 Добавить WAL-атомарность в `write_8x.py` (предотвращение порчи базы при падении процесса) — писать во временный файл, затем `os.replace()` 4. 🟡 Улучшить `jwt_auth.py`: добавить проверки `iat`, `nbf`, `jti`, исправить kid confusion (не перебирать все секреты при невалидном kid) 5. 🟡 Закрывать `ThreadPoolExecutor` в `_run_timeout` через `with` или try/finally 6. 🟡 Исправить `asyncio.run` внутри sync тула на `asyncio.get_event_loop().run_until_complete()` с проверкой running loop 7. 🟡 Исправить `field_is_pii` в `pii_scanner.py` — использовать `\\b` границы слов вместо `in` 8. 🟡 Исправить `_redact` в `audit.py` — не маскировать `guid` 9. 🟡 Исправить парсер WHERE в `query.py` — экранирование `;` внутри строковых литералов",
+  "platform": "",
+  "constraints": "compact",
+  "budget": "compact",
+  "clarity": "vague",
+  "language": "ru",
+  "appliesLessons": [
+    "скилл-onec-converter-migration:forge:684890ea40c4",
+    "скилл-onec-converter-migration:forge:d89d5187918c",
+    "скилл-onec-converter-migration:forge:bc925d77a1ff",
+    "mcp-сервер-cli-onec:out:1ae8e49495d2",
+    "скилл-onec-converter-migration:forge:56cc53ac3e99"
+  ]
+}

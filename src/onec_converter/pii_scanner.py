@@ -1,4 +1,4 @@
-"""Сканер персональных данных (ПДн), Фаза 37.
+"""Сканер персональных данных (ПДн)
 
 Глубокий поиск ПДн в тексте/значениях: ИНН (12/10), СНИЛС, номера банковских
 карт (проверка Луна), телефоны (РФ и Узбекистан +998, ПИНФЛ 14), e-mail.
@@ -94,7 +94,7 @@ def field_is_pii(field: str, profile: str = 'RU') -> bool:
     """Является ли имя поля (реквизита) персональным данным."""
     f = (field or '').upper()
     names = PII_FIELDS_UZ if profile == 'UZ' else PII_FIELDS_RU
-    return any(k.upper() in f for k in names)
+    return any(re.search(rf'\b{re.escape(k.upper())}\b', f) for k in names)
 
 
 def scan_record(record: dict[str, Any], profile: str = 'RU'

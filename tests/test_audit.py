@@ -33,6 +33,31 @@ def _reset_audit():
     set_audit(None)
 
 
+def test_audit_session_context(tmp_path: Path):
+    """audit_session изолирует контекст, вложенные сессии работают."""
+    from onec_converter.audit import audit_session, get_audit
+
+    with audit_session():
+        a_outer = get_audit()
+        a_outer.info('test', obj='outer')
+        assert a_outer is not None
+
+    # вне контекста — новый in-memory
+    a_fallback = get_audit()
+    assert a_fallback is not a_outer
+
+    # вложенные контексты
+    with audit_session(tmp_path / 'nested.jsonl'):
+        a1 = get_audit()
+        with audit_session():
+            a2 = get_audit()
+            assert a2 is not a1
+            assert a2.path is None
+        # после выхода внутреннего — восстановлен внешний
+        assert get_audit() is a1
+        assert a1.path == tmp_path / 'nested.jsonl'
+
+
 # ---- unit: журнал ----
 def test_audit_log_file(tmp_path: Path):
     log = AuditLog(tmp_path / 'a.jsonl')

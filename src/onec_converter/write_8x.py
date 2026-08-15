@@ -1,4 +1,4 @@
-"""Прямая запись в 1CD 8.3 (Фаза 10): создание базы и добавление записей.
+"""Прямая запись в 1CD 8.3 : создание базы и добавление записей.
 
 Работаем ТОЛЬКО на копиях баз — никогда на оригиналах. Формат по
 docs/format-8x.md (раздел «Запись»): заголовок (1CDBMSV8, страницы 8192),
@@ -13,11 +13,13 @@ root-объект (стр. 2) с каталогом таблиц в blob-цеп�
 
 from __future__ import annotations
 
+import os
 import shutil
 import struct
 import warnings
 from pathlib import Path
 
+from .errors import ConverterRuntimeError, LockError, WriteError
 from .fake_1cd import FixtureTable, build_fake_1cd
 from .source_8x_file import Database1CD
 
@@ -26,12 +28,12 @@ PAGE_HEADER_SIZE = 24
 OBJ_SIG = b'\x1c\xfd'
 
 
-class WriteError(Exception):
+class WriteError(ConverterRuntimeError):
     """Ошибка прямой записи в 1CD."""
 
 
 class LockError(WriteError):
-    """База открыта/используется — запись запрещена (Фаза 12)."""
+    """База открыта/используется — запись запрещена ()."""
 
 
 def copy_1cd(src: str | Path, dst: str | Path) -> Path:
@@ -231,6 +233,10 @@ def append_records(path: str | Path, table_name: str, rows: bytes) -> int:
     и длину объекта таблицы, total_pages в заголовке. Таблица без объекта
     данных (data_page == 0) не поддерживается — WriteError. Открытая ИБ
     (1Cv8.1CL/1Cv8tmp*) — LockError. Индексы не пересобираются — warning.
+
+    Атомарность (WAL): все изменения пишутся во временный файл рядом
+    с исходным, затем os.replace() — если процесс упадёт посередине,
+    исходный файл остаётся нетронутым.
     """
     p = Path(path)
     with Database1CD(p) as db:
@@ -259,50 +265,60 @@ def append_records(path: str | Path, table_name: str, rows: bytes) -> int:
         raise WriteError('нельзя уменьшить таблицу')
     new_pages = pages + list(range(total, total + need))
     total += need
-    # перезаписываем все страницы объекта: последняя страница могла быть
-    # неполной, и новые байты могли частично влезть в неё (need == 0)
-    for j in range(n_pages):
-        _write_page(p, new_pages[j],
-                    new_data[j * PAGE_SIZE:(j + 1) * PAGE_SIZE])
-    entries = (PAGE_SIZE - PAGE_HEADER_SIZE) // 4
-    # переход fat_level 0 -> 1, если FAT не влезает в заголовок
-    if fat_level == 0 and n_pages > entries:
-        per = PAGE_SIZE // 4
-        n_ind = (n_pages + per - 1) // per
-        if n_ind > entries:
-            raise WriteError(f'нужен fat_level 2 ({n_ind} indirect > {entries} '
-                             f'слотов): таблица {table_name!r} слишком большая')
-        new_ind: list[int] = []
-        for k in range(n_ind):
-            ibuf = bytearray(PAGE_SIZE)
-            for j, pg in enumerate(new_pages[k * per:(k + 1) * per]):
-                struct.pack_into('<I', ibuf, 4 * j, pg)
-            _write_page(p, total, bytes(ibuf))
-            new_ind.append(total)
-            total += 1
-        _write_object_header(p, t.data_page, new_ind, len(new_data),
-                             fat_level=1)
-    elif fat_level == 0:
-        _write_object_header(p, t.data_page, new_pages, len(new_data))
-    elif fat_level == 1:
-        # indirect-страницы: page_size/4 номеров данных на страницу-указатель
-        per = PAGE_SIZE // 4
-        n_ind = (n_pages + per - 1) // per
+
+    # WAL: пишем во временный файл, затем атомарный replace
+    wal = p.with_suffix('.1cd.wal')
+    try:
+        shutil.copy2(p, wal)
+        for j in range(n_pages):
+            _write_page(wal, new_pages[j],
+                        new_data[j * PAGE_SIZE:(j + 1) * PAGE_SIZE])
         entries = (PAGE_SIZE - PAGE_HEADER_SIZE) // 4
-        if n_ind > entries:
-            raise WriteError(f'нужен fat_level 2 ({n_ind} indirect > {entries} '
-                             f'слотов): таблица {table_name!r} слишком большая')
-        new_ind1: list[int] = []
-        for k in range(n_ind):
-            ibuf = bytearray(PAGE_SIZE)
-            for j, pg in enumerate(new_pages[k * per:(k + 1) * per]):
-                struct.pack_into('<I', ibuf, 4 * j, pg)
-            _write_page(p, total, bytes(ibuf))
-            new_ind1.append(total)
-            total += 1
-        _write_object_header(p, t.data_page, new_ind1, len(new_data),
-                             fat_level=1)
-    else:
-        raise WriteError(f'fat_level {fat_level} не поддерживается (0/1)')
-    _set_total_pages(p, total)
+        # переход fat_level 0 -> 1
+        if fat_level == 0 and n_pages > entries:
+            per = PAGE_SIZE // 4
+            n_ind = (n_pages + per - 1) // per
+            if n_ind > entries:
+                raise WriteError(f'нужен fat_level 2 ({n_ind} indirect > {entries} '
+                                 f'слотов): таблица {table_name!r} слишком большая')
+            new_ind: list[int] = []
+            for k in range(n_ind):
+                ibuf = bytearray(PAGE_SIZE)
+                for j, pg in enumerate(new_pages[k * per:(k + 1) * per]):
+                    struct.pack_into('<I', ibuf, 4 * j, pg)
+                _write_page(wal, total, bytes(ibuf))
+                new_ind.append(total)
+                total += 1
+            _write_object_header(wal, t.data_page, new_ind, len(new_data),
+                                 fat_level=1)
+        elif fat_level == 0:
+            _write_object_header(wal, t.data_page, new_pages, len(new_data))
+        elif fat_level == 1:
+            per = PAGE_SIZE // 4
+            n_ind = (n_pages + per - 1) // per
+            entries = (PAGE_SIZE - PAGE_HEADER_SIZE) // 4
+            if n_ind > entries:
+                raise WriteError(f'нужен fat_level 2 ({n_ind} indirect > {entries} '
+                                 f'слотов): таблица {table_name!r} слишком большая')
+            new_ind1: list[int] = []
+            for k in range(n_ind):
+                ibuf = bytearray(PAGE_SIZE)
+                for j, pg in enumerate(new_pages[k * per:(k + 1) * per]):
+                    struct.pack_into('<I', ibuf, 4 * j, pg)
+                _write_page(wal, total, bytes(ibuf))
+                new_ind1.append(total)
+                total += 1
+            _write_object_header(wal, t.data_page, new_ind1, len(new_data),
+                                 fat_level=1)
+        else:
+            raise WriteError(f'fat_level {fat_level} не поддерживается (0/1)')
+        _set_total_pages(wal, total)
+        os.replace(wal, p)
+    except BaseException:
+        if wal.exists():
+            try:
+                wal.unlink()
+            except OSError:
+                pass
+        raise
     return len(new_data) // row_length

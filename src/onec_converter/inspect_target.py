@@ -79,7 +79,7 @@ def inspect_target_from_http(meta: dict[str, Any]) -> TargetMetadata:
 
 
 def inspect_target_from_1cd(target_1cd: str | Path) -> TargetMetadata:
-    """Прямое чтение 1Cv8.1CD приёмника (собственный парсер, Фаза 5)."""
+    """Прямое чтение 1Cv8.1CD приёмника (собственный парсер)."""
     from .source_8x_file import read_metadata  # импорт на месте: модуль в Фазе 5
     md: dict[str, Any] = read_metadata(target_1cd)
     return TargetMetadata(md['objects'])

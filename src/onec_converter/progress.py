@@ -1,4 +1,4 @@
-"""Прогресс переноса данных (Фаза 38, мониторинг).
+"""Прогресс переноса данных (, мониторинг).
 
 Лёгкий трекер строк/ошибок при extract/load в единицу времени. Не пишет
 файл — это чистые счётчики в памяти для экспорта в Prometheus через
@@ -82,20 +82,17 @@ class WorkflowProgress:
         return '\n'.join(lines)
 
 
-# глобальный трекер процесса (для CLI metrics / дашборда)
-_active: WorkflowProgress | None = None
+def get_progress() -> WorkflowProgress | None:
+    """Активный прогресс текущего контекста.
 
-
-def get_progress() -> WorkflowProgress:
-    global _active
-    if _active is None:
-        _active = WorkflowProgress()
-    return _active
+    В текущей реализации всегда None — глобальный трекер удалён.
+    Для отслеживания прогресса создавайте WorkflowProgress явно.
+    """
+    return None
 
 
 def reset_progress() -> None:
-    global _active
-    _active = None
+    """Сброс прогресса (больше не нужен — глобал удалён)."""
 
 
 # ---------------------------------------------------------------------------

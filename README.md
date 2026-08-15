@@ -88,7 +88,7 @@ onec-converter <команда> --help
 | Чтение ИБ | `inspect`, `extract`, `stats`, `dump-records`, `query` |
 | Структуры/сверка | `guid-diff`, `config-versions`, `verify`, `rules-diff` |
 | Маппинг | `map --init/--llm-prompt`, `ai-map`, `ai-explain`, `transform` |
-| Загрузка | `migrate` (сквозной перенос одной командой), `wizard` (мастер), `load` (файл/HTTP/direct), `clone-db`, `dump-report` (S3) |
+| Загрузка | `migrate` (сквозной перенос одной командой), `migrate-all` (SQLite-мост), `wizard` (мастер), `load` (файл/HTTP/direct), `clone-db`, `dump-report` (S3) |
 | Отчёты | `export-xlsx`, `sonar-report`, `export-kd3`, `pii-report`, `audit` |
 | Инфраструктура | `doctor --fix`, `cache`, `metrics`, `benchmark`, `mcp --stdio` (MCP-сервер), `shell` |
 | Сервис | `mint-token`, `fetch-config`, `techlog` |
@@ -611,3 +611,28 @@ rep = load_direct('1C_8.1', objects, workdir='./out')   # {'ok', 'copy_path', ..
   ТЧ-таблиц). Разделы с расхождением исключаются из плана и попадают
   в отчёт `meta_conflicts`. Флаг `--meta-conflicts` выводит только этот
   отчёт, без запуска переноса.
+
+## migrate-all: SQLite-мост (один проход, без xlsx)
+
+`migrate-all` — сквозной перенос через SQLite: выгрузка всех user-таблиц
+за один проход 1CD, прямая запись в копию приёмника. Быстрее xlsx-моста
+при большом количестве объектов.
+
+```
+# Быстрый режим (extract → load, без маппинга)
+onec-converter migrate-all --source "1C_8.1" --target "1C_8.3"
+
+# Полный цикл с авто-маппингом (extract → automap → apply → load)
+onec-converter migrate-all --source "1C_8.1" --target "1C_8.3" --full
+
+# Тестовый прогон (ограничение строк и объектов)
+onec-converter migrate-all --source "1C_8.1" --target "1C_8.3" --limit 5
+
+# С указанием путей
+onec-converter migrate-all \
+  --source "1C_8.1" --target "1C_8.3" \
+  --sqlite-out "migrate.sqlite" --report "report.json"
+```
+
+Параметры: `--source`, `--target` (обязательные), `--sqlite-out`,
+`--report`, `--workdir`, `--full`, `--limit`.

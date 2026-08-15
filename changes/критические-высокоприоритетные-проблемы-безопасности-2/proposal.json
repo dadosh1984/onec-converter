@@ -1,0 +1,16 @@
+{
+  "title": "критические-высокоприоритетные-проблемы-безопасности-2",
+  "goal": "Исправить критические и высокоприоритетные проблемы безопасности, корректности и архитектуры в onec-converter по результатам аудита. Объём работ: 1. Заменить input() на getpass.getpass() в cli.py:_resolve_secret - утечка секретов 2. Добавить SSRF-фильтр в HttpClient83 - блокировка private/localhost IP 3. Добавить WAL-атомарность в write_8x.py - предотвращение порчи базы 4. Улучшить jwt_auth.py: добавить проверки iat, jti, исправить kid confusion 5. Закрывать ThreadPoolExecutor в _run_timeout - утечка потоков 6. Исправить asyncio.run внутри sync тула - RuntimeError при SSE-транспорте 7. Исправить field_is_pii в pii_scanner.py - границы слов 8. Исправить _redact в audit.py - не маскировать guid 9. Исправить парсер WHERE в query.py - экранирование ; внутри строк",
+  "platform": "",
+  "constraints": "compact",
+  "budget": "compact",
+  "clarity": "vague",
+  "language": "ru",
+  "appliesLessons": [
+    "скилл-onec-converter-migration:forge:d89d5187918c",
+    "скилл-onec-converter-migration:forge:684890ea40c4",
+    "скилл-onec-converter-migration:forge:9b6fcea6b6bd",
+    "скилл-onec-converter-migration:forge:56cc53ac3e99",
+    "фаза-11-новая-порция:forge:409e2a92d172"
+  ]
+}

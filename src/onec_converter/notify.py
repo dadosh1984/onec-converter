@@ -1,4 +1,4 @@
-"""Уведомления по завершении переноса (Фаза 27).
+"""Уведомления по завершении переноса .
 
 Webhook-хук (простой HTTP POST JSON) и Telegram: `notify_telegram` строит
 URL `https://api.telegram.org/bot<token>/sendMessage` и шлёт текст.
@@ -22,8 +22,7 @@ def _retry_delivery(url: str, body: bytes, timeout: int,
                     attempts: int, backoff: float) -> dict[str, Any]:
     """Отправка с retry (attempts попыток, экспоненциальный backoff).
 
-    Ретраятся: сетевые сбои (URLError) и 5xx (транзиентные ошибки шлюза,
-    U33). 4xx (HTTPError) — не ретраятся: это стабильный отказ контракта,
+    Ретраятся: сетевые сбои (URLError) и 5xx (транзиентные ошибки шлюза. 4xx (HTTPError) — не ретраятся: это стабильный отказ контракта,
     ретрай не поможет. После исчерпания попыток — NotifyError.
     """
     last: Exception | None = None
@@ -61,8 +60,7 @@ def send_webhook(url: str, payload: dict[str, Any], timeout: int = 15,
 
 
 def telegram_url(token: str, chat_id: str) -> str:
-    """URL Telegram Bot API для sendMessage (chat_id/token экранируются,
-    Фаза 46)."""
+    """URL Telegram Bot API для sendMessage (chat_id/token экранируются)."""
     from urllib.parse import quote
 
     return (f'https://api.telegram.org/bot{quote(token, safe="")}/sendMessage'

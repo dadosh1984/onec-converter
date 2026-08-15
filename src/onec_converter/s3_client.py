@@ -1,4 +1,4 @@
-"""Минимальный S3-клиент для экспорта отчётов (Фаза 27, идея 1c-s3connector).
+"""Минимальный S3-клиент для экспорта отчётов (, идея 1c-s3connector).
 
 Авторская реализация AWS SigV4 (PUT object) на stdlib — без boto3:
 `put_object` загружает файл в bucket по path-style URL
@@ -130,7 +130,7 @@ def upload_file(bucket: str, key: str, path: str | Path, *,
                 content_type: str = 'application/json',
                 chunk: int = 8 * 1024 * 1024,
                 timeout: int = 600) -> dict[str, Any]:
-    """Потоковая загрузка файла в S3 (PUT), O(1) память (Фаза 49, U36).
+    """Потоковая загрузка файла в S3 (PUT), O(1) память .
 
     Первый проход — sha256 и размер (чанками); второй проход — тело
     чанками через http.client (Content-Length задан). Файл не читается
@@ -308,7 +308,7 @@ def assume_role(role_arn: str, session_name: str, *,
                 region: str = 'us-east-1',
                 duration_seconds: int = 3600,
                 external_id: str = '') -> dict[str, str]:
-    """Получить временные ключи через AWS STS AssumeRole (U28).
+    """Получить временные ключи через AWS STS AssumeRole .
 
     Возвращает {'AccessKeyId', 'SecretAccessKey', 'SessionToken',
     'Expiration'}. Реализация — подписанный SigV4 POST к sts.amazonaws.com

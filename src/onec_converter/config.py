@@ -1,4 +1,4 @@
-"""Конфигурация проекта (Фаза 20): читает onec.toml в каталоге проекта/текущей папке.
+"""Конфигурация проекта : читает onec.toml в каталоге проекта/текущей папке.
 
 Повторяющиеся параметры CLI (кодировка источника, лимиты, tmp-каталог)
 могут задаваться в файле, чтобы не повторять длинные флаги.
@@ -26,11 +26,11 @@ class ProjectConfig:
     target_url: str = ''
     retries: int = 3
     tmp_dir: str = ''
-    # аутентификация приёмника (Фаза 22): OAuth2 client-credentials
+    # аутентификация приёмника (): OAuth2 client-credentials
     token_url: str = ''
     client_id: str = ''
     client_secret: str = ''
-    secret: str = ''  # общий секрет mint-token (Фаза 33)
+    secret: str = ''  # общий секрет mint-token ()
     # прочие ключи сохраняются как есть
     _raw: dict[str, Any] = field(default_factory=dict)
 
@@ -64,7 +64,7 @@ class ProjectConfig:
                         setattr(cfg, attr, val)
                 except ValueError:
                     pass
-        # секция [auth] — OAuth2-параметры приёмника (Фаза 22)
+        # секция [auth] — OAuth2-параметры приёмника ()
         auth = parser['auth'] if parser.has_section('auth') else sec
         for src, attr in [('token_url', 'token_url'),
                           ('client_id', 'client_id'),

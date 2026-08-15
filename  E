@@ -1,0 +1,2 @@
+﻿Ошибка при выполнении операции с информационной базой
+server_addr=YSTEM descr=11001(0x00002AF9): Этот хост неизвестен.  line=585 file=src\core\src\Networking.cpp

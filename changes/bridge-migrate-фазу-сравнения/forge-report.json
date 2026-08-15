@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "done": 1,
+  "total": 1,
+  "skipped": 0,
+  "pending": [],
+  "missingSnippets": [],
+  "reportPath": "changes/bridge-migrate-фазу-сравнения/forge-report.md",
+  "message": "forge complete: 1 done, 0 skipped from cache"
+}

@@ -32,12 +32,13 @@ def test_progress_prometheus_render():
 
 
 def test_progress_global_and_reset():
-    reset_progress()
-    g = get_progress()
+    from onec_converter.progress import WorkflowProgress
+    # Больше нет глобального _active — используем явный объект
+    g = WorkflowProgress()
     g.tick_rows(1)
-    assert get_progress().rows == 1
-    reset_progress()
-    assert get_progress().rows == 0
+    assert g.rows == 1
+    g = WorkflowProgress()
+    assert g.rows == 0
 
 
 # ---- S3 multipart (структура через mock urllib) ----

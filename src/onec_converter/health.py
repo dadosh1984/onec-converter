@@ -1,4 +1,4 @@
-"""Здоровье базы 1CD: `base_health` (Фаза 27, идея OneS2Zabbix).
+"""Здоровье базы 1CD: `base_health` (, идея OneS2Zabbix).
 
 Сводка для мониторинга/агента: версия ИБ, число таблиц и строк, блокировки
 (файлы 1Cv8.1CL / 1Cv8tmp* — признак открытой ИБ), свободное место на диске,
@@ -71,7 +71,7 @@ def base_health(source_dir: str | Path, include_rows: bool = False,
         'rows': rows,
         'rows_computed': include_rows,
         'locks': locks,
-        'errors': errors,      # реальная диагностика (Фаза 46): пустой файл,
+        'errors': errors,      # реальная диагностика (): пустой файл,
                                # блокировки другой сессией
         'file_bytes': cd.stat().st_size,
         'free_bytes': free_bytes,
