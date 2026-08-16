@@ -3,6 +3,47 @@
 Все заметные изменения для пользователя. Формат — по убыванию версий.
 Версия — SemVer, монотонно растёт; номер фазы — в описании релиза.
 
+## 2.0.0 (2026-08)
+
+### Архитектура
+- **`engine.py`** — выделено чистое ядро ETL, тестируемое в изоляции;
+  CLI и MCP-сервер вызывают единый `run_pipeline()` (убран дубликат логики).
+- **`errors.py`** — единая иерархия исключений (`ConverterRuntimeError`,
+  без затенения `builtins`).
+- **contextvars** — `audit.py`, `progress.py`, `server_state.py` теперь
+  потокобезопасны: убраны глобальные mutable-singletons (`audit._active`,
+  `progress._active`, `_SERVER_META_CACHE`).
+- **PyJWT** — новая `jwt_utils.py` (encode/verify) заменяет самописную
+  криптографию `jwt_auth.py`.
+
+### Безопасность
+- SSRF-фильтр в `http_client.py`.
+- Секреты вводятся через `getpass` (не попадают в историю shell).
+- `_idref_prefix` — детерминированный MD5-префикс вместо нулевых байтов.
+- Секреты DSN не утекают в исключение (`mask_dsn` в `sql_source.py`).
+
+### Исправления
+- `_make_idref` в `load_8x.py` дописан (ранее был обрезан).
+- `resolver=None` в `transform_object` (CLI + MCP migrate).
+- `ThreadPoolExecutor` корректно закрывается (`shutdown`).
+- Парсер WHERE — quote-aware split (не ломается на `;` в строках).
+- PII-сканер — word boundaries (нет ложных срабатываний на «ИННОКЕНТИЙ»).
+- **15 упавших тестов исправлено** (0 в конце):
+  - WinError 5 при записи через xlsx-мост — `Database1CD` закрывается перед
+    `append_records` на Windows, переоткрывается через `__init__`;
+  - закомментированный `raise SqlSourceError` в `sql_source._connect()`
+    восстановлен (3 теста на ошибки подключения);
+  - `PII_FIELDS_RU` пополнен (`ФИО`, `НомерТелефона`) — корректный отчёт
+    GDPR (1 тест).
+
+### Рефакторинг
+- Удалены 134+ фазовых метки и U-коды из docstring'ов.
+- Imports отсортированы (`ruff --fix`).
+- `.pre-commit-config.yaml` — защита от регрессий.
+
+### Тесты
+- Всего **660 passed / 0 failed** (+1 skipped, прежние 13 failed — закрыты).
+
 ## 0.47.0 (2026-08)
 
 ### bridge-migrate: документы и ТЧ + фаза сравнения метаданных

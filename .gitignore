@@ -31,6 +31,8 @@ tmp_phase8/
 # Артефакты рабочего процесса агента (TS-спайки, отчёты Orion)
 src/tasks/
 reports/
+changes/
+ROADMAP.md
 src/config/orionTdd.json
 *.test.ts
 *.ts
