@@ -120,7 +120,8 @@ class GenericSqlSource:
                 from .secret_mask import mask_dsn
 
                 msg = f'не удалось подключиться к {self.kind}: {exc}'
-                # секреты DSN не утекают в исключение /raise SqlSourceError(mask_dsn(msg)) from exc
+                # секреты DSN не утекают в исключение
+                raise SqlSourceError(mask_dsn(msg)) from exc
         return self._conn
 
     def close(self) -> None:

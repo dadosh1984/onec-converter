@@ -85,7 +85,8 @@ def import_bridge(bridge_path: str | Path, target_dir: str | Path,
 
     errors: list[dict[str, Any]] = []
     created = updated = skipped = 0
-    with Database1CD(work) as db:
+    db = Database1CD(work)
+    try:
         if table_name not in db.tables:
             raise BridgeError(f'нет таблицы {table_name!r} в приёмнике')
         t = db.tables[table_name]
@@ -133,7 +134,9 @@ def import_bridge(bridge_path: str | Path, target_dir: str | Path,
                                  + b'\x00' * 4)
                         row_bytes = _build_row(t, fm_by_name, values, idref,
                                                phys_ru)
+                        db.close()
                         append_records(work, table_name, row_bytes)
+                        db = Database1CD(work)
                         created += 1
                         created_here = True
                 elif cfg.mode == MODE_TABLE:
@@ -142,6 +145,8 @@ def import_bridge(bridge_path: str | Path, target_dir: str | Path,
                         work, db, t, vt, lookup, obj_name, fm_by_name,
                         phys_ru, search_cols, cfg.columns,
                         values, vt_lines, owner_cache, cfg.no_new)
+                    if db._closed:
+                        db = Database1CD(work)
                     if created_owner:
                         created += 1
                     # строки ТЧ не меняют updated (счётчик строк см. rows_tabular)
@@ -154,7 +159,9 @@ def import_bridge(bridge_path: str | Path, target_dir: str | Path,
                         overwrite_row(work, table_name, found_idx[0], row_bytes)
                         updated += 1
                     else:
+                        db.close()
                         append_records(work, table_name, row_bytes)
+                        db = Database1CD(work)
                         reg_index = _register_index(db, t, ru_phys,
                                                     search_cols)
                         created += 1
@@ -164,7 +171,13 @@ def import_bridge(bridge_path: str | Path, target_dir: str | Path,
             except Exception as exc:  # noqa: BLE001 — одна строка не рвёт загрузку
                 errors.append({'row': row_no, 'error': str(exc)})
                 skipped += 1
-
+                if db._closed:
+                    try:
+                        db = Database1CD(work)
+                    except Exception:
+                        pass
+    finally:
+        db.close()
     final = wd / '1Cv8.1CD'
     work.replace(final)
     return {'ok': True, 'copy_path': str(final),
@@ -441,14 +454,18 @@ def _load_tabular(work: Path, db: Database1CD, t: Any, vt: Any,
         counter = _max_counter(db, t, idr) + 1
         owner = (prefix + struct.pack('<Q', counter) + b'\x00' * 4)
         row_bytes = _build_row(t, fm_by_name, values, owner, phys_ru)
+        db.close()
         append_records(work, t.name, row_bytes)
+        db.__init__(work)  # переоткрываем тот же объект (mmap пересоздаётся)
         created_owner = True
         owner_cache[own_key] = owner
     line = vt_lines.get(owner, _max_line(db, vt, owner) + 1)
     vt_attrs = {c.attr: values[c.attr] for c in columns
                 if c.flag and not c.search and c.attr in values}
     vrow = make_vt_row(vt, owner, line, vt_attrs)
+    db.close()
     append_records(work, vt.name, vrow)
+    db.__init__(work)
     vt_lines[owner] = line + 1
     return created_owner
 

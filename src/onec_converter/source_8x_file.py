@@ -376,6 +376,17 @@ class Database1CD:
         self._ref_table_cache: dict[str, dict[bytes, str]] = {}  # таблица -> idrref: имя
         self._ref_name_cache: dict[tuple[str, bytes], str | None] = {}
         self._stats_cache: dict[str, tuple[int, int]] = {}  # таблица -> (строки, байты)
+        self._closed = False
+
+    def close(self) -> None:
+        """Закрыть дескриптор и mmap."""
+        if self._closed:
+            return
+        self._closed = True
+        if self._mm is not None:
+            self._mm.close()
+            self._mm = None
+        self._f.close()
 
     def table_stats(self, table_name: str) -> tuple[int, int]:
         """Размеры таблицы: (число строк, байт данных) — с кешем.
