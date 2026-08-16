@@ -378,9 +378,8 @@ class PipelineState:
         # http_load — функция(пакет) -> результат; приёмник загружается через HTTP-клиент
         if self.binding is None:
             raise ValueError('вызовите init')
-        results = []
-        for obj in self.extracted:
-            results.append(http_load([obj], self.binding.source_ib_id, self.binding.target_ib_id))
+        # батчинг: HttpClient83.load() сам режет на пакеты по 500
+        results = [http_load(self.extracted, self.binding.source_ib_id, self.binding.target_ib_id)]
         self._mark('load')
         ok_all = all(bool(r.get('ok')) for r in results)
         created = sum(int(r.get('created', 0)) for r in results)
